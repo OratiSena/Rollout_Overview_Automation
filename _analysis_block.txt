@@ -1,0 +1,61 @@
+﻿# ========== 7) Análise por Site (lead time) ==========
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    st.markdown("<h2 style='margin: 6px 0 12px 0; font-size: 24px;'>Análise por Site (lead time)</h2>", unsafe_allow_html=True)
+    with st.expander("Abrir análise por site", expanded=False):
+        mode = st.radio("Modo", ["Média (todos os sites)", "Site específico"], horizontal=True, key="site_analysis_mode")
+
+        # Preparação: tempos parado por status (wide)
+        stay = etl.stage_stay_days(df_raw)
+        phase_order = [s for (_f, s, _c) in phase_map]
+
+        if mode == "Média (todos os sites)":
+            means = {}
+            for s in phase_order:
+                col = f"stay_{s}"
+                if col in stay.columns:
+                    v = pd.to_numeric(stay[col], errors="coerce")
+                    means[s] = float(v.mean(skipna=True)) if hasattr(v, "mean") else 0.0
+            avg_df = pd.DataFrame({"fase_curta": list(means.keys()), "dias": list(means.values())})
+            figm = px.bar(
+                avg_df, x="fase_curta", y="dias",
+                title="Tempo médio parado por status (dias)", text="dias",
+            )
+            figm.update_traces(texttemplate="%{text:.1f}")
+            figm.update_yaxes(title="Dias (média)")
+            figm.update_xaxes(title="Status")
+            figm = dark(figm)
+            st.plotly_chart(figm, use_container_width=True)
+        else:
+            # Busca e seleção de SITE
+            uniq_sites = sorted(stay["SITE"].dropna().astype(str).unique().tolist())
+            q_site = st.text_input("Pesquisar SITE", placeholder="Digite parte do SITE...")
+            matches = [s for s in uniq_sites if q_site.strip().lower() in s.lower()] if q_site else []
+            site_sel = None
+            if matches:
+                site_sel = st.selectbox("Selecionar SITE", matches, key="sel_site_analysis")
+            else:
+                if q_site:
+                    st.info("Nenhum SITE encontrado para a pesquisa.")
+
+            if site_sel:
+                row = stay[stay["SITE"].astype(str) == str(site_sel)].head(1)
+                data = []
+                total = 0
+                for s in phase_order:
+                    col = f"stay_{s}"
+                    if col in row.columns:
+                        val = float(pd.to_numeric(row[col], errors="coerce").fillna(0).iloc[0])
+                        data.append({"fase_curta": s, "dias": val})
+                        total += max(val, 0)
+                site_df = pd.DataFrame(data)
+                st.caption(f"Total decorrido (soma dos status) para {site_sel}: {int(total)} dias")
+                figs = px.bar(
+                    site_df, x="fase_curta", y="dias",
+                    title=f"Tempo parado por status (dias) – {site_sel}", text="dias",
+                )
+                figs.update_traces(texttemplate="%{text:.0f}")
+                figs.update_yaxes(title="Dias")
+                figs.update_xaxes(title="Status")
+                figs = dark(figs)
+                st.plotly_chart(figs, use_container_width=True)
+    

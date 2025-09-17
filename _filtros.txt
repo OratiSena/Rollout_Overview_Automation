@@ -1,0 +1,62 @@
+﻿    with st.expander("Filtros", expanded=True):
+        top1, top2 = st.columns([1.1, 1.9])
+
+        status_labels = ["Todas"] + [f"{full} ({full_to_short[full]})" for full in phase_list_full]
+        sel_status_label = top1.selectbox(
+            "Selecione o status", status_labels,
+            index=status_labels.index(st.session_state.sel_phase_full)
+            if st.session_state.sel_phase_full in status_labels else 0,
+            key="sel_phase_box",
+        )
+        st.session_state.sel_phase_full = sel_status_label
+
+        # Pesquisa com múltiplos termos (pressione Enter para adicionar)
+        st.session_state.setdefault("q_terms", [])
+        def _add_q_term():
+            val = st.session_state.get("q_search_new", "").strip()
+            if val:
+                parts = [p.strip() for p in val.replace(";", "\n").replace(",", "\n").splitlines() if p.strip()]
+                cur = list(st.session_state.get("q_terms", []))
+                for p in parts:
+                    if not any(p.lower() == c.lower() for c in cur):
+                        cur.append(p)
+                st.session_state["q_terms"] = cur
+            st.session_state["q_search_new"] = ""
+        top2.text_input(
+            "Pesquisar (SITE, status, UF/Regional, Subcon, Type, Model, PO)",
+            placeholder="Digite e pressione Enter para adicionar",
+            key="q_search_new",
+            on_change=_add_q_term,
+        )
+        # Mostrar termos adicionados
+        if st.session_state.get("q_terms"):
+            chips = st.session_state.get("q_terms", [])
+            _cchips = st.container()
+            with _cchips:
+                st.write("Pesquisas:", ", ".join([f"'{t}'" for t in chips]))
+                if st.button("Limpar pesquisas", key="btn_clear_terms"):
+                    st.session_state["q_terms"] = []
+
+        r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+        r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+        r3c1, r3c2, r3c3, r3c4 = st.columns(4)
+
+        # Universo de todas as fases (para opcoes ano/lead time)
+        frames = []
+        for full, short, _c in phase_map:
+            tmp = sites_for_phase_explicit(df_raw, df_clean, full)
+            tmp["fase_label"] = full
+            tmp["fase_curta"] = short
+            frames.append(tmp)
+        base_all = pd.concat(frames, ignore_index=True)
+
+        # Normalizacoes
+        if "Infra PO" in base_all.columns and "PO" not in base_all.columns:
+            base_all = base_all.rename(columns={"Infra PO": "PO"})
+        if "Group" in base_all.columns and "Regional" not in base_all.columns:
+            base_all = base_all.rename(columns={"Group": "Regional"})
+        if "UF" not in base_all.columns and "state" in base_all.columns:
+            base_all["UF"] = base_all["state"]
+
+        # (bloco movido; ver mais abaixo onde base_all é usado para snapshot/ano/lead time)
+

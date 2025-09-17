@@ -1,0 +1,46 @@
+﻿    # 6.2) Aplicar filtros da UI ao snapshot
+    mask_sites = pd.Series(True, index=sites.index)
+
+    # NAÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o restringe por "Selecione o status" aqui; deixa a filtragem fina para a etapa da tabela
+
+    if sel_uf:
+        mask_sites &= sites["UF"].astype(str).isin(sel_uf)
+    if sel_reg:
+        mask_sites &= sites["Regional"].astype(str).isin(sel_reg)
+    if sel_subcon:
+        mask_sites &= sites["Subcon"].astype(str).isin(sel_subcon)
+    if sel_type:
+        mask_sites &= sites["Type"].astype(str).isin(sel_type)
+    if sel_model:
+        mask_sites &= sites["Model"].astype(str).isin(sel_model)
+    if sel_po:
+        mask_sites &= sites["PO"].astype(str).isin(sel_po)
+    if sel_year:
+        mask_sites &= pd.to_numeric(sites["year"], errors="coerce").astype("Int64").isin(sel_year)
+    if 'sel_carimbo' in locals() and sel_carimbo:
+        if "Carimbo" in sites.columns:
+            mask_sites &= sites["Carimbo"].astype(str).isin(sel_carimbo)
+
+    lt_low, lt_high = (lt_sel if "lt_sel" in locals() else (0, 10**9))
+    sites["delay_days"] = pd.to_numeric(sites["delay_days"], errors="coerce").fillna(0)
+    mask_sites &= sites["delay_days"].between(lt_low, lt_high)
+
+    # Pesquisa por múltiplos termos
+    terms = [t.strip() for t in st.session_state.get("q_terms", []) if str(t).strip()]
+    if terms:
+        cols_search = [c for c in [
+            "SITE", "current_full", "current_short", "last_phase_short", "UF", "Regional", "Subcon", "Type", "Model", "PO"
+        ] if c in sites.columns]
+        mm_any = pd.Series(False, index=sites.index)
+        for term in terms:
+            ql = str(term).strip().lower()
+            if not ql:
+                continue
+            mm = pd.Series(False, index=sites.index)
+            for c in cols_search:
+                mm |= sites[c].astype(str).str.lower().str.contains(ql, na=False)
+            mm_any |= mm
+        mask_sites &= mm_any
+
+    sites_f = sites.loc[mask_sites].drop_duplicates(subset=["SITE"]).copy()
+    total_sites = int(sites_f["SITE"].nunique())
