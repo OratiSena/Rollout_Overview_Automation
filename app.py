@@ -1197,7 +1197,11 @@ def page_rollout():
             pass
         return None
     _ts_suffix = _current_data_suffix()
-    if viz_type == "Barras":
+
+    if total_sites <= 0 or bars.empty:
+        st.info("Nenhum site restante com os filtros atuais.")
+        fig = None
+    elif viz_type == "Barras":
         if Situacao == "Ambos":
             long = bars.melt(
                 id_vars=["fase_curta"],
@@ -1244,7 +1248,8 @@ def page_rollout():
         fig = dark(fig)
 
     # Renderiza sem eventos de clique
-    st.plotly_chart(fig, use_container_width=True, key="status_main_chart")
+    if fig is not None:
+        st.plotly_chart(fig, use_container_width=True, key="status_main_chart")
 
 
 
