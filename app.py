@@ -1,32 +1,40 @@
-Ôªø# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
-# üìÅ M√≥dulos padr√£o da biblioteca Python
+# ?? MÛdulos padr„o da biblioteca Python
 from pathlib import Path
 from datetime import datetime
 
-# üìä Manipula√ß√£o de dados e visualiza√ß√£o
+# ?? ManipulaÁ„o de dados e visualizaÁ„o
 import pandas as pd
 
 try:
     import plotly.express as px
     import plotly.graph_objects as go
 except ModuleNotFoundError:
-    import subprocess, sys
-    subprocess.check_call(
+    import subprocess, sys, logging
+    result = subprocess.run(
         [sys.executable, "-m", "pip", "install", "plotly==5.24.0"],
-        stdout=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
     )
+    if result.returncode != 0:
+        logging.warning(
+            "Fallback pip install plotly failed (%s): %s",
+            result.returncode,
+            result.stdout,
+        )
     import plotly.express as px
     import plotly.graph_objects as go
 
 
-# üåê Interface web com Streamlit
+# ?? Interface web com Streamlit
 import streamlit as st
 
-# üß† M√≥dulo local (certifique-se de que o diret√≥rio 'core' est√° no mesmo n√≠vel do script)
+# ?? MÛdulo local (certifique-se de que o diretÛrio 'core' est· no mesmo nÌvel do script)
 import core.etl_rollout as etl
 
-# üîç Fun√ß√µes espec√≠ficas do m√≥dulo etl_rollout
+# ?? FunÁıes especÌficas do mÛdulo etl_rollout
 from core.etl_rollout import (
     clean_rollout_dataframe,
     kpi_from_explicit_cells,
@@ -87,11 +95,11 @@ if "route" not in st.session_state:
 
 def _nav_item_removed(*_args, **_kwargs):
     # Mantido como stub para compatibilidade com antigos trechos (desativados)
-    # de navega√ß√£o. N√£o √© usado na execu√ß√£o atual.
+    # de navegaÁ„o. N„o È usado na execuÁ„o atual.
     pass
 
 with st.sidebar:
-    # Logo ZTE centralizada (tamanho m√©dio)
+    # Logo ZTE centralizada (tamanho mÈdio)
     try:
         if Path("zte-logo.png").exists():
             _c1, _c2, _c3 = st.columns([1, 2, 1])
@@ -100,28 +108,28 @@ with st.sidebar:
     except Exception:
         pass
 
-    # Sidebar: Rollout (expans√≠vel) + checkbox simples
+    # Sidebar: Rollout (expansÌvel) + checkbox simples
     st.session_state.setdefault("show_status", True)
     st.session_state.setdefault("show_lead", True)
-    st.markdown("<div style='color:#9aa0a6; font-weight:600; font-size:13px; margin:6px 0 8px; display:flex; align-items:center;'>Automa√ß√µes<div style='flex:1; border-top:1px solid #3a3f44; margin-left:8px;'></div></div>", unsafe_allow_html=True)
+    st.markdown("<div style='color:#9aa0a6; font-weight:600; font-size:13px; margin:6px 0 8px; display:flex; align-items:center;'>AutomaÁıes<div style='flex:1; border-top:1px solid #3a3f44; margin-left:8px;'></div></div>", unsafe_allow_html=True)
     with st.expander("Rollout", expanded=True):
-        st.checkbox("Visualiza√ß√£o por Status", key="show_status")
+        st.checkbox("VisualizaÁ„o por Status", key="show_status")
 
-        st.checkbox("An√°lise por Site (lead time)", key="show_lead")   
+        st.checkbox("An·lise por Site (lead time)", key="show_lead")   
       
         st.session_state.setdefault("show_fiel", True)
         st.checkbox("Tabela Fiel/Real", key="show_fiel")
 
-    # Se√ß√£o e menu no estilo Ant Design
+    # SeÁ„o e menu no estilo Ant Design
     st.session_state.setdefault("show_status", True)
     st.session_state.setdefault("route", "rollout")
     if False:
         try:
             try:
-                sac.divider("Automa√ß√µes")
+                sac.divider("AutomaÁıes")
             except Exception:
                 st.markdown(
-                    "<div style='color:#9aa0a6; font-weight:600; font-size:13px; margin:6px 0 6px;'>Automa√ß√µes</div>",
+                    "<div style='color:#9aa0a6; font-weight:600; font-size:13px; margin:6px 0 6px;'>AutomaÁıes</div>",
                     unsafe_allow_html=True,
                 )
 
@@ -131,7 +139,7 @@ with st.sidebar:
                         "Rollout",
                         key="rollout",
                         children=[
-                            sac.MenuItem("Visualiza√ß√£o por Status", icon="bar-chart", key="rollout_status"),
+                            sac.MenuItem("VisualizaÁ„o por Status", icon="bar-chart", key="rollout_status"),
                         ],
                     ),
                 ],
@@ -149,22 +157,22 @@ with st.sidebar:
             if "show_status" not in st.session_state:
                 st.session_state["show_status"] = True
 
-            st.checkbox("Visualiza√ß√£o por Status", key="show_status")
+            st.checkbox("VisualizaÁ„o por Status", key="show_status")
     if False:
-        # Fallback simples com o mesmo visual hier√°rquico
+        # Fallback simples com o mesmo visual hier·rquico
         st.markdown(
-            "<div style='color:#9aa0a6; font-weight:600; font-size:13px; margin:6px 0 6px;'>Automa√ß√µes</div>",
+            "<div style='color:#9aa0a6; font-weight:600; font-size:13px; margin:6px 0 6px;'>AutomaÁıes</div>",
             unsafe_allow_html=True,
         )
         _nav_item_removed("Rollout", "rollout", indent=0)
         if "show_status" not in st.session_state:
             st.session_state["show_status"] = True
 
-        st.checkbox("Visualiza√ß√£o por Status", key="show_status")
+        st.checkbox("VisualizaÁ„o por Status", key="show_status")
 
 
     st.markdown("---")
-    st.markdown("<div style='text-align:center; color:#9aa0a6; font-size:12px;'>Centro de Automa√ß√£o - Claro</div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align:center; color:#9aa0a6; font-size:12px;'>Centro de AutomaÁ„o - Claro</div>", unsafe_allow_html=True)
 @st.cache_data(show_spinner=False)
 def read_excel_no_header(path: Path) -> pd.DataFrame:
     # header=None preserva as 7 linhas do topo (KPIs na linha 6)
@@ -248,27 +256,27 @@ def reset_all():
     st.session_state["sit_radio"] = "Ambos"
     st.session_state["viz_type_radio"] = "Barras"
 
-    # Se salvarmos sele√ß√µes por clique em session_state, limpe aqui tamb√©m
+    # Se salvarmos seleÁıes por clique em session_state, limpe aqui tambÈm
     for k in ("clicked_phase_short", "clicked_serie"):
         st.session_state.pop(k, None)
 
-    # Evita a mensagem "st.rerun() within a callback is a no-op"; a interface ser√° rerenderizada automaticamente
+    # Evita a mensagem "st.rerun() within a callback is a no-op"; a interface ser· rerenderizada automaticamente
     # st.rerun()
 
 
-# ---------------- P√°gina Rollout ----------------
+# ---------------- P·gina Rollout ----------------
 def _is_all_label(s) -> bool:
     return isinstance(s, str) and ("todas" in s.lower())
 
 
 def request_reset():
-    """Marca reset pendente e for√ßa novo ciclo de execu√ß√£o."""
+    """Marca reset pendente e forÁa novo ciclo de execuÁ„o."""
     st.session_state["__do_reset__"] = True
     st.rerun()
 
 
 def render_lead_analysis(df_raw: pd.DataFrame):
-    """Renderiza a se√ß√£o 'Analise por Site (lead time)'. Independente dos filtros."""
+    """Renderiza a seÁ„o 'Analise por Site (lead time)'. Independente dos filtros."""
     phase_map = get_explicit_phase_map(df_raw)
      
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
@@ -335,15 +343,15 @@ def _get_site_col_idx_from_raw(df_raw: pd.DataFrame) -> int:
 def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
     """
     Tabela Fiel/Real (Streamlit):
-      - L√™ linhas 4..7 do Excel e monta L4 (status), L5 (Plan/RePlan/Actual/...),
-        L6 (quantidade) e L7 (t√≠tulo da coluna).
-      - Exibi√ß√£o em 2 n√≠veis (limite do Streamlit):
+      - LÍ linhas 4..7 do Excel e monta L4 (status), L5 (Plan/RePlan/Actual/...),
+        L6 (quantidade) e L7 (tÌtulo da coluna).
+      - ExibiÁ„o em 2 nÌveis (limite do Streamlit):
           Top  = L4 (status)
-          Bot  = (L5 + '/ L6' se houver) + ' ‚Äî ' + L7
+          Bot  = (L5 + '/ L6' se houver) + ' ó ' + L7
       - Respeita filtros (sites_f)
-      - Datas sem hor√°rio (nunca em 'Qty')
-      - Expander ‚ÄúOp√ß√µes da tabela‚Äù (blocos por L4 e densidade)
-      - Largura das colunas calculada a partir do tamanho do cabe√ßalho
+      - Datas sem hor·rio (nunca em 'Qty')
+      - Expander ìOpÁıes da tabelaî (blocos por L4 e densidade)
+      - Largura das colunas calculada a partir do tamanho do cabeÁalho
       - Download com colunas achatadas
     """
     import io
@@ -378,14 +386,14 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
 
 
     # ---- Aplica filtros por SITE ----
-    # ---- Alinha as LINHAS com a mesma sele√ß√£o da tabela "Visualiza√ß√£o por Status" ----
+    # ---- Alinha as LINHAS com a mesma seleÁ„o da tabela "VisualizaÁ„o por Status" ----
     site_idx = _get_site_col_idx_from_raw(df_raw)
     body = df_raw.iloc[BODY_START:].copy()
 
-    # 1) Come√ßa pelos filtros globais j√° aplicados em sites_f
+    # 1) ComeÁa pelos filtros globais j· aplicados em sites_f
     keep_sites = set(sites_f["SITE"].astype(str))
 
-    # 2) Se um status espec√≠fico estiver selecionado, aplica tamb√©m Conclu√≠dos/Faltando
+    # 2) Se um status especÌfico estiver selecionado, aplica tambÈm ConcluÌdos/Faltando
     final_sites = keep_sites.copy()
     try:
         try:
@@ -436,7 +444,7 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
 
 
 
-    # ---- Detecta in√≠cio (Host Name) e captura cabe√ßalhos 4..7 ----
+    # ---- Detecta inÌcio (Host Name) e captura cabeÁalhos 4..7 ----
     head0 = df_raw.iloc[:7]
     start_idx = _find_start_idx_for_host(head0, fallback=4)
 
@@ -447,7 +455,7 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
     l4_raw = head.iloc[0].tolist()  # Status
     l5_raw = head.iloc[1].tolist()  # Plan/RePlan/Actual/...
     l6_raw = head.iloc[2].tolist()  # Quantidades
-    l7_raw = head.iloc[3].tolist()  # R√≥tulo final (PPWS-PL, WHP-AC...)
+    l7_raw = head.iloc[3].tolist()  # RÛtulo final (PPWS-PL, WHP-AC...)
 
     # L4: ffill para repetir o status por todas as colunas do bloco
     l4, last = [], ""
@@ -457,7 +465,7 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
             last = val
         l4.append(last)
 
-    # L5: s√≥ mantemos tokens de etapa; metadados ficam vazios aqui
+    # L5: sÛ mantemos tokens de etapa; metadados ficam vazios aqui
     L5_KEEP = {
         "PLAN", "REPLAN", "RE-PLAN", "RPLAN",
         "ACTUAL", "AC", "ACT",
@@ -465,20 +473,20 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
     }
     l5 = [(_norm(x) if _up(x) in L5_KEEP else "") for x in l5_raw]
 
-    # L6: s√≥ mostra quando L5 existir e o valor parecer num√©rico
+    # L6: sÛ mostra quando L5 existir e o valor parecer numÈrico
     l6 = [(_norm(x) if (l5[i] and _is_numberlike(x)) else "") for i, x in enumerate(l6_raw)]
 
-    # L7: r√≥tulo final
+    # L7: rÛtulo final
     l7 = [_norm(x) for x in l7_raw]
 
-    # MultiIndex 4 n√≠veis (para l√≥gica interna)
+    # MultiIndex 4 nÌveis (para lÛgica interna)
     cols4 = pd.MultiIndex.from_arrays([l4, l5, l6, l7], names=["L4", "L5", "L6", "L7"])
     df_all = body.copy()
     df_all.columns = cols4
 
-    # ---- Op√ß√µes da tabela ----
+    # ---- OpÁıes da tabela ----
     st.markdown("<h3 style='margin: 18px 0 6px;'>Tabela Fiel</h3>", unsafe_allow_html=True)
-    with st.expander("Op√ß√µes da tabela", expanded=False):
+    with st.expander("OpÁıes da tabela", expanded=False):
         l4_all = [x for x in list(dict.fromkeys(df_all.columns.get_level_values(0))) if _norm(x)]
         show_blks = st.multiselect(
             "Blocos (linha 4 do Excel)", options=l4_all, default=l4_all,
@@ -488,10 +496,10 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
             "Densidade por bloco",
             ["AC", "AC + Plan", "Completo"],
             horizontal=True,
-            help="AC = s√≥ 'Actual'; AC+Plan = 'Plan' + 'Actual'; Completo = todas as colunas."
+            help="AC = sÛ 'Actual'; AC+Plan = 'Plan' + 'Actual'; Completo = todas as colunas."
         )
 
-    # ---- Sele√ß√£o de colunas (blocos + densidade) ----
+    # ---- SeleÁ„o de colunas (blocos + densidade) ----
     l4_lv = df_all.columns.get_level_values(0).astype(str)
     l5_lv = df_all.columns.get_level_values(1).astype(str)
 
@@ -522,7 +530,7 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
             seen.add(c)
     df_sel = df_all.loc[:, ordered]
 
-    # ---- Datas sem hor√°rio (NUNCA em 'Qty') ----
+    # ---- Datas sem hor·rio (NUNCA em 'Qty') ----
     def _looks_date_col(col_tuple):
         name_l7 = _up(col_tuple[-1])
         if name_l7 == "QTY":
@@ -540,7 +548,7 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
             if ser.notna().sum() > 0:
                 df_sel[col] = ser.dt.strftime("%d-%b-%y").where(ser.notna(), df_sel[col])
 
-    # ---- COMPACTA√á√ÉO para 2 n√≠veis de exibi√ß√£o ----
+    # ---- COMPACTA«√O para 2 nÌveis de exibiÁ„o ----
     lvl0, lvl1 = [], []
     for (L4, L5, L6, L7) in df_sel.columns:
         top = _norm(L4)  # sempre o status aqui
@@ -550,7 +558,7 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
         if _norm(L6):
             bot_parts.append(f"{L6}")
         if _norm(L7):
-            bot_parts.append(f"‚Äî {L7}")
+            bot_parts.append(f"ó {L7}")
         bot = " / ".join(bot_parts) if bot_parts else (_norm(L7) or _norm(L4))
         lvl0.append(top)
         lvl1.append(bot)
@@ -559,10 +567,10 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
     df_view = df_sel.copy()
     df_view.columns = cols2
 
-    # ---- Largura autom√°tica por tamanho de cabe√ßalho ----
+    # ---- Largura autom·tica por tamanho de cabeÁalho ----
     colcfg = {}
     def _auto_w(s: str):
-        # largura m√≠nima 120, m√°xima 360, proporcional ao texto
+        # largura mÌnima 120, m·xima 360, proporcional ao texto
         n = max(len(s), 8)
         return max(120, min(360, int(n * 7.2)))
 
@@ -574,7 +582,7 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
         except Exception:
             pass
 
-    # espec√≠ficos menores
+    # especÌficos menores
     for name, width in [("Host Name", 160), ("Site Name", 160), ("State", 90)]:
         for col in df_view.columns:
             if _norm(col[1]).lower().endswith(name.lower()) or _norm(col[1]).lower() == name.lower():
@@ -639,7 +647,7 @@ def page_rollout():
     if uploaded is not None:
         ext = (Path(uploaded.name).suffix or "").lower()
         if ext not in {".xlsb", ".xlsx", ".xlsm"}:
-            st.error(f"Extens√£o n√£o suportada: {ext}")
+            st.error(f"Extens„o n„o suportada: {ext}")
         else:
             safe_name = Path(uploaded.name).name
             saved_path = DATA_DIR / safe_name
@@ -650,7 +658,7 @@ def page_rollout():
             if uploaded.name == saved_path.name:
                 st.success(f"Arquivo salvo: {saved_path.name}")
             else:
-                st.success(f"Arquivo salvo: {uploaded.name} ‚Üí {saved_path.name}")
+                st.success(f"Arquivo salvo: {uploaded.name} ? {saved_path.name}")
             try:
                 ts = datetime.now().strftime("%d/%m/%Y %H:%M")
                 st.caption(f"Enviado agora ({ts})")
@@ -666,12 +674,12 @@ def page_rollout():
         dt = meta.get("uploaded_at", "")
         dt_disp = dt.replace("T", " | ") if isinstance(dt, str) else dt
         if on == sp:
-            st.caption(f"Arquivo atual: {on} ‚Ä¢ enviado em {dt_disp}")
+            st.caption(f"Arquivo atual: {on} ï enviado em {dt_disp}")
         else:
-            st.caption(f"Arquivo atual: {on} (salvo como {sp}) ‚Ä¢ enviado em {dt_disp}")
+            st.caption(f"Arquivo atual: {on} (salvo como {sp}) ï enviado em {dt_disp}")
         shown_info = True
     else:
-        # Fallback: procurar qualquer Excel salvo no diret√≥rio de dados
+        # Fallback: procurar qualquer Excel salvo no diretÛrio de dados
         cands = []
         for pat in ("*.xlsb", "*.xlsx", "*.xlsm"):
             cands.extend(DATA_DIR.glob(pat))
@@ -681,7 +689,7 @@ def page_rollout():
                 ts = datetime.fromtimestamp(cand.stat().st_mtime).strftime("%d/%m/%Y %H:%M")
             except Exception:
                 ts = ""
-            st.caption(f"Arquivo atual: {cand.name} ‚Ä¢ salvo em {ts}")
+            st.caption(f"Arquivo atual: {cand.name} ï salvo em {ts}")
             shown_info = True
 
     if st.button("Carregar planilha", key="btn_load"):
@@ -697,7 +705,7 @@ def page_rollout():
             if cands:
                 target_path = sorted(cands, key=lambda p: p.stat().st_mtime)[-1]
         if not target_path:
-            st.error("Nenhum arquivo salvo. Fa√ßa o upload primeiro.")
+            st.error("Nenhum arquivo salvo. FaÁa o upload primeiro.")
             st.stop()
         with st.spinner("Lendo e tratando..."):
             df_raw = read_excel_no_header(target_path)
@@ -727,7 +735,7 @@ def page_rollout():
     # Computa total a partir de Concluidos + faltam
     kpi["total"] = kpi["Concluidos"] + kpi["faltam"]
 
-    # Visualizacao por Status (√∫nica se√ß√£o atual)
+    # Visualizacao por Status (˙nica seÁ„o atual)
     if not st.session_state.get("show_status", True):
         if st.session_state.get("show_lead", True):
             render_lead_analysis(df_raw)
@@ -736,7 +744,7 @@ def page_rollout():
     # Titulo grande para a secao
     st.markdown(
         """
-        <h2 style='margin: 6px 0 12px 0; font-size: 28px;'>Visualiza√ß√£o por Status</h2>
+        <h2 style='margin: 6px 0 12px 0; font-size: 28px;'>VisualizaÁ„o por Status</h2>
         """,
         unsafe_allow_html=True,
     )
@@ -757,7 +765,7 @@ def page_rollout():
     short_to_full = {short: full for (full, short, _c) in phase_map}
     phase_list_full = [full for (full, _s, _c) in phase_map]
 
-    # Estados padr√£o
+    # Estados padr„o
     st.session_state.setdefault("viz_type", "Barras")
     st.session_state.setdefault("escopo", "Ambos")
     st.session_state.setdefault("sel_phase_full", "Todas")
@@ -768,7 +776,7 @@ def page_rollout():
     # ========== 4) Tipo de grafico e Escopo ==========
     col_viz, col_sit, col_reset = st.columns([1, 1, 0.25])
     viz_type = col_viz.radio(
-        "Visualiza√ß√£o",
+        "VisualizaÁ„o",
         ["Barras", "Pizza"],
         horizontal=True,
         index=0 if st.session_state.get("viz_type", "Barras") == "Barras" else 1,
@@ -780,7 +788,7 @@ def page_rollout():
     default_sit = st.session_state.get("escopo", "Ambos")
     if default_sit not in sit_opts:
         default_sit = "Concluidos" if viz_type == "Pizza" else "Ambos"
-    Situacao = col_sit.radio("Situa√ß√£o", sit_opts, horizontal=True, index=sit_opts.index(default_sit), key="sit_radio")
+    Situacao = col_sit.radio("SituaÁ„o", sit_opts, horizontal=True, index=sit_opts.index(default_sit), key="sit_radio")
     st.session_state["escopo"] = Situacao
 
     if col_reset.button("Resetar", use_container_width=True, key="btn_reset_all"):
@@ -794,21 +802,21 @@ def page_rollout():
         top1, top2 = st.columns([1.1, 1.9])
 
         # Filtro de status
-        #Constru√ß√£o da vari√°vel sites
+        #ConstruÁ„o da vari·vel sites
         order_full = [full for (full, short, _c) in phase_map]
         order_short = [short for (full, short, _c) in phase_map]
         short2idx = {s: i for i, s in enumerate(order_short)}
         full2short = {full: short for (full, short, _c) in phase_map}
         
         
-        # Se n√£o vier pronto do ETL, derive o 'full' pelo mapa
+        # Se n„o vier pronto do ETL, derive o 'full' pelo mapa
         short2full = {s: f for (f, s, _c) in phase_map}
         # Snapshot (sempre com last_phase_full)
         snap = last_status_snapshot(df_raw)[
             ["SITE", "last_phase_short", "last_phase_full", "last_date"]
         ].copy()
 
-        # Normaliza√ß√µes e campos derivados
+        # NormalizaÁıes e campos derivados
         snap["last_phase_short"] = (
             snap["last_phase_short"].astype(str).where(snap["last_phase_short"].isin(order_short), None)
         )
@@ -890,7 +898,7 @@ def page_rollout():
         r2c1, r2c2, r2c3, r2c4 = st.columns(4)
         r3c1, r3c2, r3c3, r3c4 = st.columns(4)
 
-        # Constru√ß√£o do base_all com fases
+        # ConstruÁ„o do base_all com fases
         frames = []
         for full, short, _c in phase_map:
             tmp = sites_for_phase_explicit(df_raw, df_clean, full)
@@ -899,7 +907,7 @@ def page_rollout():
             frames.append(tmp)
         base_all = pd.concat(frames, ignore_index=True)
 
-        # Normaliza√ß√µes
+        # NormalizaÁıes
         if "Infra PO" in base_all.columns and "PO" not in base_all.columns:
             base_all = base_all.rename(columns={"Infra PO": "PO"})
         if "Group" in base_all.columns and "Regional" not in base_all.columns:
@@ -971,7 +979,7 @@ def page_rollout():
     # 6.2) Aplicar filtros da UI ao snapshot
     mask_sites = pd.Series(True, index=sites.index)
 
-    # N√£o restringe por "Selecione o status" aqui; deixa a filtragem fina para a etapa da tabela
+    # N„o restringe por "Selecione o status" aqui; deixa a filtragem fina para a etapa da tabela
 
     if sel_uf:
         mask_sites &= sites["UF"].astype(str).isin(sel_uf)
@@ -995,7 +1003,7 @@ def page_rollout():
     sites["delay_days"] = pd.to_numeric(sites["delay_days"], errors="coerce").fillna(0)
     mask_sites &= sites["delay_days"].between(lt_low, lt_high)
 
-    # Pesquisa por m√∫ltiplos termos
+    # Pesquisa por m˙ltiplos termos
     terms = [t.strip() for t in st.session_state.get("q_terms", []) if str(t).strip()]
     if terms:
         cols_search = [c for c in [
@@ -1041,7 +1049,7 @@ def page_rollout():
         if _cs in set(order_short):
             bars = bars[bars["fase_curta"] == _cs]
     bars["total"] = bars["Concluidos"] + bars["Faltando"]
-    # Sufixo de data/hora para t√≠tulos (usa meta; fallback: mtime do arquivo)
+    # Sufixo de data/hora para tÌtulos (usa meta; fallback: mtime do arquivo)
     def _current_data_suffix():
         try:
             meta2 = _load_saved_meta()
@@ -1113,9 +1121,9 @@ def page_rollout():
 
     table_df = sites_f.copy()
 
-    # --- 1) fase_label/fase_curta = PR√ìXIMO status ap√≥s o √∫ltimo conclu√≠do (pendente) ---
-    # Usamos a ordem vinda do phase_map j√° montado acima
-    # order_short, short2idx, short2full j√° existem no trecho anterior
+    # --- 1) fase_label/fase_curta = PR”XIMO status apÛs o ˙ltimo concluÌdo (pendente) ---
+    # Usamos a ordem vinda do phase_map j· montado acima
+    # order_short, short2idx, short2full j· existem no trecho anterior
     def _next_short(last_short: str) -> str:
         i = short2idx.get(str(last_short), -1)
         i_next = min(i + 1, len(order_short) - 1)
@@ -1124,18 +1132,18 @@ def page_rollout():
     table_df["fase_curta"] = table_df.get("last_phase_short").map(_next_short)
     table_df["fase_label"] = table_df["fase_curta"].map(short2full)
 
-    # --- 2) Se um status foi escolhido, filtrar conforme Situa√ß√£o ---
+    # --- 2) Se um status foi escolhido, filtrar conforme SituaÁ„o ---
     if not _is_all_label(st.session_state.sel_phase_full):
         chosen_full = st.session_state.sel_phase_full.split(" (")[0].strip()
         chosen_short = full2short.get(chosen_full)
 
-        # Conclu√≠dos: presen√ßa de data na coluna AC do status escolhido (mesma base do gr√°fico)
+        # ConcluÌdos: presenÁa de data na coluna AC do status escolhido (mesma base do gr·fico)
         concl_sites = set()
         if chosen_short and chosen_short in wide_f.columns:
             concl_mask  = pd.to_datetime(wide_f[chosen_short], errors="coerce").notna()
             concl_sites = set(wide_f.loc[concl_mask, "SITE"].astype(str))
 
-        # Faltando: exatamente os que est√£o PENDENTES nesse status (fase_curta == chosen_short)
+        # Faltando: exatamente os que est„o PENDENTES nesse status (fase_curta == chosen_short)
         pend_mask = table_df["fase_curta"].astype(str) == str(chosen_short)
 
         esc = st.session_state.get("escopo", "Ambos")
@@ -1146,10 +1154,10 @@ def page_rollout():
         else:  # Ambos
             table_df = table_df[pend_mask | table_df["SITE"].astype(str).isin(concl_sites)]
 
-    # (Opcional) badge de situa√ß√£o para o status selecionado
+    # (Opcional) badge de situaÁ„o para o status selecionado
     # if not _is_all_label(st.session_state.sel_phase_full) and chosen_short and chosen_short in wide_f.columns:
     #     table_df["sit_selected"] = table_df["SITE"].astype(str).map(
-    #         lambda s: "Conclu√≠do" if s in concl_sites else ("Faltando" if s in set(table_df.loc[pend_mask, "SITE"].astype(str)) else "")
+    #         lambda s: "ConcluÌdo" if s in concl_sites else ("Faltando" if s in set(table_df.loc[pend_mask, "SITE"].astype(str)) else "")
     #     )
 
     # Fallback de current_status (se faltar)
@@ -1166,7 +1174,7 @@ def page_rollout():
 
 
 
-    # ========== 7) An√°lise de lead time ==========
+    # ========== 7) An·lise de lead time ==========
     if st.session_state.get("show_lead", True):
         render_lead_analysis(df_raw)
         
@@ -1187,3 +1195,4 @@ if st.session_state.route == "rollout":
     page_rollout()
 else:
     page_rollout()
+
