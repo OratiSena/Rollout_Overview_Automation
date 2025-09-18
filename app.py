@@ -112,7 +112,16 @@ ACCENT = "#F74949"
 st.markdown(
     """
     <style>
+.chart-mobile {
+    display: none;
+}
 @media (max-width: 768px) {
+    .chart-desktop {
+        display: none !important;
+    }
+    .chart-mobile {
+        display: block !important;
+    }
     .mobile-plot {
         overflow-x: auto;
         padding-bottom: 8px;
@@ -351,6 +360,22 @@ def request_reset():
     st.rerun()
 
 
+def _render_dual_chart(fig_desktop, fig_mobile, key_base: str, wrap_mobile: bool = True):
+    """Renderiza um par de gráficos (desktop/mobile) com chaves isoladas."""
+    if fig_desktop is not None:
+        st.markdown('<div class="chart-desktop">', unsafe_allow_html=True)
+        st.plotly_chart(fig_desktop, use_container_width=True, key=f"{key_base}_desktop")
+        st.markdown('</div>', unsafe_allow_html=True)
+    if fig_mobile is not None:
+        classes = ['chart-mobile']
+        if wrap_mobile:
+            classes.append('mobile-plot')
+        class_attr = ' '.join(classes)
+        st.markdown(f"<div class='{class_attr}'>", unsafe_allow_html=True)
+        st.plotly_chart(fig_mobile, use_container_width=True, key=f"{key_base}_mobile")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+
 def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
     """Renderiza a secao 'Analise por Site (lead time)' respeitando filtros."""
     phase_map = get_explicit_phase_map(df_raw)
@@ -387,7 +412,19 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
                 st.info("Nenhum site restante com os filtros atuais.")
             else:
                 avg_df = _build_mean_df(stay_filtered)
-                figm = px.bar(
+                fig_desktop = px.bar(
+                    avg_df,
+                    x="fase_curta",
+                    y="dias",
+                    title=f"Tempo medio parado por status (dias) | {len(stay_filtered)} site(s)",
+                    text="dias",
+                )
+                fig_desktop.update_traces(texttemplate="%{text:.1f}")
+                fig_desktop.update_yaxes(title="Dias (media)")
+                fig_desktop.update_xaxes(title="Status")
+                fig_desktop = dark(fig_desktop)
+
+                fig_mobile = px.bar(
                     avg_df,
                     y="fase_curta",
                     x="dias",
@@ -395,16 +432,27 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
                     title=f"Tempo medio parado por status (dias) | {len(stay_filtered)} site(s)",
                     text="dias",
                 )
-                figm.update_traces(texttemplate="%{text:.1f}", textposition="outside")
-                figm.update_xaxes(title="Dias (media)")
-                figm.update_yaxes(title="Status", categoryorder="array", categoryarray=phase_order)
-                figm = dark(figm)
-                st.markdown('<div class="mobile-plot">', unsafe_allow_html=True)
-                st.plotly_chart(figm, use_container_width=True, key="lead_filtered_chart")
-                st.markdown('</div>', unsafe_allow_html=True)
+                fig_mobile.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+                fig_mobile.update_xaxes(title="Dias (media)")
+                fig_mobile.update_yaxes(title="Status", categoryorder="array", categoryarray=phase_order)
+                fig_mobile = dark(fig_mobile)
+
+                _render_dual_chart(fig_desktop, fig_mobile, "lead_filtered_chart")
         elif mode == "Media (todos os sites)":
             avg_df = _build_mean_df(stay)
-            figm = px.bar(
+            fig_desktop = px.bar(
+                avg_df,
+                x="fase_curta",
+                y="dias",
+                title=f"Tempo medio parado por status (dias) | {len(stay)} site(s)",
+                text="dias",
+            )
+            fig_desktop.update_traces(texttemplate="%{text:.1f}")
+            fig_desktop.update_yaxes(title="Dias (media)")
+            fig_desktop.update_xaxes(title="Status")
+            fig_desktop = dark(fig_desktop)
+
+            fig_mobile = px.bar(
                 avg_df,
                 y="fase_curta",
                 x="dias",
@@ -412,13 +460,12 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
                 title=f"Tempo medio parado por status (dias) | {len(stay)} site(s)",
                 text="dias",
             )
-            figm.update_traces(texttemplate="%{text:.1f}", textposition="outside")
-            figm.update_xaxes(title="Dias (media)")
-            figm.update_yaxes(title="Status", categoryorder="array", categoryarray=phase_order)
-            figm = dark(figm)
-            st.markdown('<div class="mobile-plot">', unsafe_allow_html=True)
-            st.plotly_chart(figm, use_container_width=True, key="lead_avg_chart")
-            st.markdown('</div>', unsafe_allow_html=True)
+            fig_mobile.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+            fig_mobile.update_xaxes(title="Dias (media)")
+            fig_mobile.update_yaxes(title="Status", categoryorder="array", categoryarray=phase_order)
+            fig_mobile = dark(fig_mobile)
+
+            _render_dual_chart(fig_desktop, fig_mobile, "lead_avg_chart")
         else:
             uniq_all = sorted(stay["SITE"].dropna().astype(str).unique().tolist())
             default_pool = sorted(filtered_sites) if filtered_sites else uniq_all
@@ -445,7 +492,20 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
                         total += max(val, 0.0)
                 site_df = pd.DataFrame(data)
                 st.caption(f"Total decorrido (soma dos status) para {site_sel}: {int(total)} dias")
-                figs = px.bar(
+
+                fig_desktop = px.bar(
+                    site_df,
+                    x="fase_curta",
+                    y="dias",
+                    title=f"Tempo parado por status (dias) - {site_sel}",
+                    text="dias",
+                )
+                fig_desktop.update_traces(texttemplate="%{text:.0f}")
+                fig_desktop.update_yaxes(title="Dias")
+                fig_desktop.update_xaxes(title="Status")
+                fig_desktop = dark(fig_desktop)
+
+                fig_mobile = px.bar(
                     site_df,
                     y="fase_curta",
                     x="dias",
@@ -453,13 +513,12 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
                     title=f"Tempo parado por status (dias) - {site_sel}",
                     text="dias",
                 )
-                figs.update_traces(texttemplate="%{text:.0f}", textposition="outside")
-                figs.update_xaxes(title="Dias")
-                figs.update_yaxes(title="Status", categoryorder="array", categoryarray=phase_order)
-                figs = dark(figs)
-                st.markdown('<div class="mobile-plot">', unsafe_allow_html=True)
-                st.plotly_chart(figs, use_container_width=True, key=f"lead_site_chart_{site_sel}")
-                st.markdown('</div>', unsafe_allow_html=True)
+                fig_mobile.update_traces(texttemplate="%{text:.0f}", textposition="outside")
+                fig_mobile.update_xaxes(title="Dias")
+                fig_mobile.update_yaxes(title="Status", categoryorder="array", categoryarray=phase_order)
+                fig_mobile = dark(fig_mobile)
+
+                _render_dual_chart(fig_desktop, fig_mobile, f"lead_site_chart_{site_sel}")
 
 def _get_site_col_idx_from_raw(df_raw: pd.DataFrame) -> int:
     """Descobre a coluna SITE no df_raw (linha 7 do header)."""
@@ -1230,7 +1289,7 @@ def page_rollout():
 
     if total_sites <= 0 or bars.empty:
         st.info("Nenhum site restante com os filtros atuais.")
-        fig = None
+        fig_desktop = fig_mobile = None
     elif viz_type == "Barras":
         if Situacao == "Ambos":
             long = bars.melt(
@@ -1242,8 +1301,26 @@ def page_rollout():
         else:
             keep = Situacao
             long = bars.rename(columns={keep: "valor"})[["fase_curta", "valor"]].assign(tipo=keep)
-        xmax = max(int(bars["total"].max()), 1)
-        fig = px.bar(
+
+        ymax = max(int(bars["total"].max()), 1)
+        fig_desktop = px.bar(
+            long, x="fase_curta", y="valor", color="tipo",
+            color_discrete_map={"Concluidos": "#1f77b4", "Faltando": "#ff7f0e"},
+            category_orders={
+                "tipo": ["Concluidos", "Faltando"],
+                "fase_curta": order_short,
+            },
+            text="valor",
+            barmode="stack" if Situacao == "Ambos" else "relative",
+            title=("Sites por status (concluidos x faltando)" + (f" | {_ts_suffix}" if _ts_suffix else "")),
+        )
+        fig_desktop.update_traces(texttemplate="%{text}")
+        fig_desktop.update_yaxes(range=[0, ymax * 1.18], title="Quantidade de sites")
+        fig_desktop.update_xaxes(title="Status")
+        fig_desktop.for_each_trace(lambda t: t.update(textposition="outside") if t.name == "Faltando" else t.update(textposition="inside"))
+        fig_desktop = dark(fig_desktop)
+
+        fig_mobile = px.bar(
             long, y="fase_curta", x="valor", color="tipo", orientation="h",
             color_discrete_map={"Concluidos": "#1f77b4", "Faltando": "#ff7f0e"},
             category_orders={
@@ -1254,28 +1331,25 @@ def page_rollout():
             barmode="stack" if Situacao == "Ambos" else "relative",
             title=("Sites por status (concluidos x faltando)" + (f" | {_ts_suffix}" if _ts_suffix else "")),
         )
-        fig.update_traces(texttemplate="%{text}", textposition="outside")
-        fig.update_xaxes(range=[0, xmax * 1.18], title="Quantidade de sites")
-        fig.update_yaxes(title="Status", categoryorder="array", categoryarray=order_short)
-        fig = dark(fig)
+        fig_mobile.update_traces(texttemplate="%{text}", textposition="outside")
+        fig_mobile.update_xaxes(range=[0, ymax * 1.18], title="Quantidade de sites")
+        fig_mobile.update_yaxes(title="Status", categoryorder="array", categoryarray=order_short)
+        fig_mobile = dark(fig_mobile)
     else:
         col = "Concluidos" if Situacao == "Concluidos" else "Faltando"
         pie_df = bars.rename(columns={col: "valor"})[["fase_curta", "valor"]]
-        fig = px.pie(
+        fig_pie = px.pie(
             pie_df,
             names="fase_curta",
             values="valor",
             title=(f"Distribuicao por status - {Situacao}" + (f" | {_ts_suffix}" if _ts_suffix else "")),
             hole=0.35,
         )
-        fig.update_traces(textinfo="value+percent", hovertemplate="<b>%{label}</b><br>" + Situacao + ": <b>%{value}</b> (%{percent})<extra></extra>")
-        fig = dark(fig)
+        fig_pie.update_traces(textinfo="value+percent", hovertemplate="<b>%{label}</b><br>" + Situacao + ": <b>%{value}</b> (%{percent})<extra></extra>")
+        fig_pie = dark(fig_pie)
+        fig_desktop = fig_mobile = fig_pie
 
-    # Renderiza sem eventos de clique
-    st.markdown('<div class="mobile-plot">', unsafe_allow_html=True)
-    if fig is not None:
-        st.plotly_chart(fig, use_container_width=True, key="status_main_chart")
-    st.markdown('</div>', unsafe_allow_html=True)
+    _render_dual_chart(fig_desktop, fig_mobile, "status_main_chart")
 
 
 
