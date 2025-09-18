@@ -7,12 +7,46 @@ import logging
 import importlib.util
 import subprocess
 import sys
+try:
+    from zoneinfo import ZoneInfo
+except Exception:
+    ZoneInfo = None
 
 # Manipulacao de dados e visualizacao
 import pandas as pd
 
 _PKG_CACHE = Path(__file__).resolve().parent / "_pkg_cache"
 _PKG_CACHE.mkdir(exist_ok=True)
+
+
+_LOCAL_TZ = None
+if ZoneInfo:
+    try:
+        _LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
+    except Exception:
+        _LOCAL_TZ = None
+
+
+def _now_local():
+    if _LOCAL_TZ:
+        return datetime.now(tz=_LOCAL_TZ)
+    return datetime.now()
+
+
+def _format_timestamp_display(raw) -> str:
+    if not raw:
+        return ""
+    raw_str = str(raw)
+    try:
+        dt_obj = datetime.fromisoformat(raw_str)
+        if dt_obj.tzinfo:
+            if _LOCAL_TZ:
+                dt_obj = dt_obj.astimezone(_LOCAL_TZ)
+        elif _LOCAL_TZ:
+            dt_obj = dt_obj.replace(tzinfo=_LOCAL_TZ)
+        return dt_obj.strftime("%d/%m/%Y %H:%M")
+    except Exception:
+        return raw_str.replace("T", " | ")
 
 
 def _ensure_package(module_name: str, pip_spec: str, target=_PKG_CACHE) -> None:
@@ -231,7 +265,7 @@ def _save_meta(saved_path: Path, original_name: str):
                 {
                     "saved_path": str(saved_path),
                     "original_name": original_name,
-                    "uploaded_at": datetime.now().isoformat(timespec="seconds"),
+                    "uploaded_at": _now_local().isoformat(timespec="seconds"),
                 },
                 ensure_ascii=False,
             ),
@@ -684,7 +718,7 @@ def page_rollout():
             else:
                 st.success(f"Arquivo salvo: {uploaded.name} ? {saved_path.name}")
             try:
-                ts = datetime.now().strftime("%d/%m/%Y %H:%M")
+                ts = _now_local().strftime("%d/%m/%Y %H:%M")
                 st.caption(f"Enviado agora ({ts})")
             except Exception:
                 pass
@@ -695,8 +729,8 @@ def page_rollout():
     if meta and Path(meta.get("saved_path", "")).exists():
         sp = Path(meta["saved_path"]).name
         on = meta.get("original_name", sp)
-        dt = meta.get("uploaded_at", "")
-        dt_disp = dt.replace("T", " | ") if isinstance(dt, str) else dt
+        dt_raw = meta.get("uploaded_at", "")
+        dt_disp = _format_timestamp_display(dt_raw)
         if on == sp:
             st.caption(f"Arquivo atual: {on}  enviado em {dt_disp}")
         else:
@@ -710,7 +744,8 @@ def page_rollout():
         if cands:
             cand = sorted(cands, key=lambda p: p.stat().st_mtime)[-1]
             try:
-                ts = datetime.fromtimestamp(cand.stat().st_mtime).strftime("%d/%m/%Y %H:%M")
+                dt_file = datetime.fromtimestamp(cand.stat().st_mtime, tz=_LOCAL_TZ) if _LOCAL_TZ else datetime.fromtimestamp(cand.stat().st_mtime)
+                ts = _format_timestamp_display(dt_file.isoformat())
             except Exception:
                 ts = ""
             st.caption(f"Arquivo atual: {cand.name}  salvo em {ts}")
@@ -966,7 +1001,11 @@ def page_rollout():
         sel_po = r2c2.multiselect("PO", po_opts, default=[], key="f_po")
 
         # Filtro de ano
-        year_opts = sorted([int(y) for y in pd.to_numeric(base_all["year"], errors="coerce").dropna().unique().tolist()])
+        if "year" in base_all.columns:
+            year_series = pd.to_numeric(base_all["year"], errors="coerce").dropna()
+            year_opts = sorted({int(y) for y in year_series.tolist()})
+        else:
+            year_opts = []
         sel_year = r2c3.multiselect("Ano", year_opts, default=[], key="f_year")
 
         # Filtro de carimbo (se existir)
@@ -1018,7 +1057,10 @@ def page_rollout():
     if sel_po:
         mask_sites &= sites["PO"].astype(str).isin(sel_po)
     if sel_year:
-        mask_sites &= pd.to_numeric(sites["year"], errors="coerce").astype("Int64").isin(sel_year)
+        if "year" in sites.columns:
+            mask_sites &= pd.to_numeric(sites["year"], errors="coerce").astype("Int64").isin(sel_year)
+        else:
+            st.warning("Filtro de ano ignorado: coluna 'year' ausente nos dados carregados.")
     if 'sel_carimbo' in locals() and sel_carimbo:
         if "Carimbo" in sites.columns:
             mask_sites &= sites["Carimbo"].astype(str).isin(sel_carimbo)
@@ -1078,8 +1120,9 @@ def page_rollout():
         try:
             meta2 = _load_saved_meta()
             if meta2 and meta2.get("uploaded_at"):
-                dt = str(meta2.get("uploaded_at"))
-                return dt.replace("T", " | ")
+                dt_disp = _format_timestamp_display(meta2.get("uploaded_at"))
+                if dt_disp:
+                    return dt_disp
         except Exception:
             pass
         try:
@@ -1219,8 +1262,3 @@ if st.session_state.route == "rollout":
     page_rollout()
 else:
     page_rollout()
-
-
-
-
-
