@@ -94,9 +94,9 @@ with st.sidebar:
     st.session_state.setdefault("show_lead", True)
     st.markdown("<div style='color:#9aa0a6; font-weight:600; font-size:13px; margin:6px 0 8px; display:flex; align-items:center;'>Automações<div style='flex:1; border-top:1px solid #3a3f44; margin-left:8px;'></div></div>", unsafe_allow_html=True)
     with st.expander("Rollout", expanded=True):
-        st.checkbox("Visualiza�ao por Status", key="show_status")
+        st.checkbox("Visualização por Status", key="show_status")
 
-        st.checkbox("An�lise por Site (lead time)", key="show_lead")   
+        st.checkbox("Análise por Site (lead time)", key="show_lead")   
       
         st.session_state.setdefault("show_fiel", True)
         st.checkbox("Tabela Fiel/Real", key="show_fiel")
