@@ -1,41 +1,64 @@
 # -*- coding: utf-8 -*-
 
-# ?? Modulos padrao da biblioteca Python
+# Modulos padrao da biblioteca Python
 from pathlib import Path
 from datetime import datetime
 import logging
+import importlib.util
+import subprocess
+import sys
 
-# ?? Manipulacao de dados e visualizacao
+# Manipulacao de dados e visualizacao
 import pandas as pd
 
-try:
-    import plotly.express as px
-    import plotly.graph_objects as go
-except ModuleNotFoundError:
-    import importlib.util as _importlib_util
-    spec = _importlib_util.find_spec('plotly.express')
-    if spec is None:
-        import subprocess, sys
-        pkg_dir = Path(__file__).resolve().parent / '_pkg_cache'
-        pkg_dir.mkdir(exist_ok=True)
-        cmd = [sys.executable, '-m', 'pip', 'install', 'plotly==5.24.0', '--target', str(pkg_dir)]
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
-        output = result.stdout.decode('utf-8', errors='ignore') if isinstance(result.stdout, (bytes, bytearray)) else str(result.stdout)
-        if result.returncode != 0:
-            logging.warning('Fallback pip install plotly failed (%s): %s', result.returncode, output[:500])
-        if str(pkg_dir) not in sys.path:
-            sys.path.insert(0, str(pkg_dir))
-    import plotly.express as px
-    import plotly.graph_objects as go
+_PKG_CACHE = Path(__file__).resolve().parent / "_pkg_cache"
+_PKG_CACHE.mkdir(exist_ok=True)
 
 
-# ?? Interface web com Streamlit
+def _ensure_package(module_name: str, pip_spec: str, target=_PKG_CACHE) -> None:
+    """Garantir que um pacote esta disponivel, instalando em cache local se necessario."""
+    if target and str(target) not in sys.path:
+        sys.path.insert(0, str(target))
+    if importlib.util.find_spec(module_name) is not None:
+        return
+    cmd = [sys.executable, "-m", "pip", "install", pip_spec]
+    if target:
+        cmd.extend(["--target", str(target)])
+    result = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+    )
+    output = (
+        result.stdout.decode("utf-8", errors="ignore")
+        if isinstance(result.stdout, (bytes, bytearray))
+        else str(result.stdout)
+    )
+    if result.returncode != 0:
+        logging.warning(
+            "Falha ao instalar %s (%s): %s",
+            pip_spec,
+            result.returncode,
+            output[:500],
+        )
+
+
+_ensure_package("plotly.express", "plotly==5.24.0")
+_ensure_package("openpyxl", "openpyxl==3.1.5")
+_ensure_package("pyxlsb", "pyxlsb==1.0.10")
+
+import plotly.express as px
+import plotly.graph_objects as go
+
+
+# Interface web com Streamlit
 import streamlit as st
 
-# ?? Modulo local (certifique-se de que o diretorio 'core' esta no mesmo nivel do script)
+# Modulo local (certifique-se de que o diretorio 'core' esta no mesmo nivel do script)
 import core.etl_rollout as etl
 
-# ?? Funcoes especificas do modulo etl_rollout
+# Funcoes especificas do modulo etl_rollout
 from core.etl_rollout import (
     clean_rollout_dataframe,
     kpi_from_explicit_cells,
