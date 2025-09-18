@@ -6,8 +6,19 @@ from datetime import datetime
 
 # 📊 Manipulação de dados e visualização
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
+
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+except ModuleNotFoundError:
+    import subprocess, sys
+    subprocess.check_call(
+        [sys.executable, "-m", "pip", "install", "plotly==5.24.0"],
+        stdout=subprocess.DEVNULL,
+    )
+    import plotly.express as px
+    import plotly.graph_objects as go
+
 
 # 🌐 Interface web com Streamlit
 import streamlit as st
