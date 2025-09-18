@@ -7,6 +7,7 @@ import logging
 import importlib.util
 import subprocess
 import sys
+import numpy as np
 try:
     from zoneinfo import ZoneInfo
 except Exception:
@@ -604,9 +605,13 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
         if _looks_date_col(col):
             ser_plain = pd.to_datetime(df_sel[col], errors="coerce")
             num_vals = pd.to_numeric(df_sel[col], errors="coerce")
-            if num_vals.notna().any():
-                ser_excel = pd.to_datetime(num_vals, unit="D", origin="1899-12-30", errors="coerce")
-                ser_plain = ser_plain.where(num_vals.isna(), ser_excel)
+            mask_numeric = num_vals.notna()
+            mask_reasonable = mask_numeric & num_vals.between(-50000, 600000)
+            if mask_reasonable.any():
+                safe_vals = num_vals.where(mask_reasonable)
+                with np.errstate(all="ignore"):
+                    ser_excel = pd.to_datetime(safe_vals, unit="D", origin="1899-12-30", errors="coerce")
+                ser_plain = ser_plain.where(~mask_reasonable, ser_excel)
             if ser_plain.notna().sum() > 0:
                 df_sel[col] = ser_plain.dt.strftime("%d-%b-%y").where(ser_plain.notna(), df_sel[col])
 
@@ -904,17 +909,6 @@ def page_rollout():
         # Final merge para construir sites
         sites = snap.merge(static, on="SITE", how="left").merge(delay_df, on="SITE", how="left")
 
-        # Enriquecer com ano vindo do base_all (quando existir)
-        try:
-            _site_year = base_all[["SITE", "year"]].dropna().drop_duplicates(subset=["SITE"])
-            sites = sites.merge(_site_year, on="SITE", how="left", suffixes=("", "_from_base"))
-            if "year_from_base" in sites.columns:
-                sites["year"] = sites["year_from_base"].where(sites["year_from_base"].notna(), sites.get("year"))
-                sites = sites.drop(columns=["year_from_base"])
-        except Exception:
-            pass
-
-
         status_labels = ["Todas"] + [f"{full} ({full_to_short[full]})" for full in phase_list_full]
         sel_status_label = top1.selectbox(
             "Selecione o status", status_labels,
@@ -977,6 +971,22 @@ def page_rollout():
             base_all = base_all.rename(columns={"Group": "Regional"})
         if "UF" not in base_all.columns and "state" in base_all.columns:
             base_all["UF"] = base_all["state"]
+
+        # Enriquecer "sites" com o ano consolidado nas fases
+        try:
+            year_lookup = base_all[["SITE", "year"]].dropna().drop_duplicates(subset=["SITE"])
+            if "year" in sites.columns:
+                sites = sites.merge(year_lookup, on="SITE", how="left", suffixes=("", "_from_base"))
+                if "year_from_base" in sites.columns:
+                    base_year = pd.to_numeric(sites["year_from_base"], errors="coerce")
+                    cur_year = pd.to_numeric(sites.get("year"), errors="coerce")
+                    sites["year"] = cur_year.where(cur_year.notna(), base_year)
+                    sites = sites.drop(columns=["year_from_base"])
+            else:
+                sites = sites.merge(year_lookup, on="SITE", how="left")
+            sites["year"] = pd.to_numeric(sites.get("year"), errors="coerce").astype("Int64")
+        except Exception:
+            pass
 
         # Snapshot e atraso
         snap_all = last_status_snapshot(df_raw)[["SITE", "last_phase_short", "last_date"]]
