@@ -112,6 +112,23 @@ ACCENT = "#F74949"
 st.markdown(
     """
     <style>
+@media (max-width: 768px) {
+    .mobile-plot {
+        overflow-x: auto;
+        padding-bottom: 8px;
+    }
+    .mobile-plot div[data-testid='stPlotlyChart'] {
+        min-width: 620px;
+    }
+    .mobile-scroll {
+        overflow-x: auto;
+        padding-bottom: 8px;
+    }
+    .mobile-scroll div[data-testid='stDataFrame'] {
+        min-width: 720px;
+    }
+}
+
     section[data-testid="stSidebar"] [data-testid="stCheckbox"],
     div[data-testid="stSidebar"] [data-testid="stCheckbox"] {
         margin: 2px 0 2px 14px;
@@ -381,7 +398,9 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
                 figm.update_yaxes(title="Dias (media)")
                 figm.update_xaxes(title="Status")
                 figm = dark(figm)
+                st.markdown('<div class="mobile-plot">', unsafe_allow_html=True)
                 st.plotly_chart(figm, use_container_width=True, key="lead_filtered_chart")
+                st.markdown('</div>', unsafe_allow_html=True)
         elif mode == "Media (todos os sites)":
             avg_df = _build_mean_df(stay)
             figm = px.bar(
@@ -395,7 +414,9 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
             figm.update_yaxes(title="Dias (media)")
             figm.update_xaxes(title="Status")
             figm = dark(figm)
+            st.markdown('<div class="mobile-plot">', unsafe_allow_html=True)
             st.plotly_chart(figm, use_container_width=True, key="lead_avg_chart")
+            st.markdown('</div>', unsafe_allow_html=True)
         else:
             uniq_all = sorted(stay["SITE"].dropna().astype(str).unique().tolist())
             default_pool = sorted(filtered_sites) if filtered_sites else uniq_all
@@ -433,7 +454,9 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
                 figs.update_yaxes(title="Dias")
                 figs.update_xaxes(title="Status")
                 figs = dark(figs)
+                st.markdown('<div class="mobile-plot">', unsafe_allow_html=True)
                 st.plotly_chart(figs, use_container_width=True, key=f"lead_site_chart_{site_sel}")
+                st.markdown('</div>', unsafe_allow_html=True)
 
 def _get_site_col_idx_from_raw(df_raw: pd.DataFrame) -> int:
     """Descobre a coluna SITE no df_raw (linha 7 do header)."""
@@ -707,10 +730,12 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
                     pass
 
     # ---- Render ----
+    st.markdown('<div class="mobile-scroll">', unsafe_allow_html=True)
     try:
         st.dataframe(df_view, use_container_width=True, height=520, column_config=colcfg)
     except Exception:
         st.dataframe(df_view, use_container_width=True, height=520)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # ---- Download (achatado) ----
     df_xlsx = df_sel.copy()
@@ -867,10 +892,12 @@ def page_rollout():
 
     # Tabela 'Status em geral (arquivo)'
     with st.expander("Status em geral (Overview)", expanded=False):
+        st.markdown('<div class="mobile-scroll">', unsafe_allow_html=True)
         st.dataframe(
             kpi[["fase_curta", "Concluidos", "faltam", "total"]].set_index("fase_curta"),
             use_container_width=True,
         )
+        st.markdown('</div>', unsafe_allow_html=True)
     
     
     
@@ -1248,8 +1275,10 @@ def page_rollout():
         fig = dark(fig)
 
     # Renderiza sem eventos de clique
+    st.markdown('<div class="mobile-plot">', unsafe_allow_html=True)
     if fig is not None:
         st.plotly_chart(fig, use_container_width=True, key="status_main_chart")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 
@@ -1304,7 +1333,9 @@ def page_rollout():
         # "sit_selected",  # (opcional) se ativar o badge acima
     ] if c in table_df.columns]
 
+    st.markdown('<div class="mobile-scroll">', unsafe_allow_html=True)
     st.dataframe(table_df.reset_index(drop=True)[cols_order], use_container_width=True, height=430)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 
