@@ -13,19 +13,15 @@ try:
     import plotly.graph_objects as go
 except ModuleNotFoundError:
     import subprocess, sys
-    result = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "plotly==5.24.0"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
-    )
+    pkg_dir = Path(__file__).resolve().parent / '_pkg_cache'
+    pkg_dir.mkdir(exist_ok=True)
+    cmd = [sys.executable, '-m', 'pip', 'install', 'plotly==5.24.0', '--target', str(pkg_dir)]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
     output = result.stdout.decode('utf-8', errors='ignore') if isinstance(result.stdout, (bytes, bytearray)) else str(result.stdout)
     if result.returncode != 0:
-        logging.warning(
-            "Fallback pip install plotly failed (%s): %s",
-            result.returncode,
-            output,
-        )
+        logging.warning('Fallback pip install plotly failed (%s): %s', result.returncode, output[:500])
+    if str(pkg_dir) not in sys.path:
+        sys.path.insert(0, str(pkg_dir))
     import plotly.express as px
     import plotly.graph_objects as go
 
