@@ -389,14 +389,15 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
                 avg_df = _build_mean_df(stay_filtered)
                 figm = px.bar(
                     avg_df,
-                    x="fase_curta",
-                    y="dias",
+                    y="fase_curta",
+                    x="dias",
+                    orientation="h",
                     title=f"Tempo medio parado por status (dias) | {len(stay_filtered)} site(s)",
                     text="dias",
                 )
-                figm.update_traces(texttemplate="%{text:.1f}")
-                figm.update_yaxes(title="Dias (media)")
-                figm.update_xaxes(title="Status")
+                figm.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+                figm.update_xaxes(title="Dias (media)")
+                figm.update_yaxes(title="Status", categoryorder="array", categoryarray=phase_order)
                 figm = dark(figm)
                 st.markdown('<div class="mobile-plot">', unsafe_allow_html=True)
                 st.plotly_chart(figm, use_container_width=True, key="lead_filtered_chart")
@@ -405,14 +406,15 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
             avg_df = _build_mean_df(stay)
             figm = px.bar(
                 avg_df,
-                x="fase_curta",
-                y="dias",
+                y="fase_curta",
+                x="dias",
+                orientation="h",
                 title=f"Tempo medio parado por status (dias) | {len(stay)} site(s)",
                 text="dias",
             )
-            figm.update_traces(texttemplate="%{text:.1f}")
-            figm.update_yaxes(title="Dias (media)")
-            figm.update_xaxes(title="Status")
+            figm.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+            figm.update_xaxes(title="Dias (media)")
+            figm.update_yaxes(title="Status", categoryorder="array", categoryarray=phase_order)
             figm = dark(figm)
             st.markdown('<div class="mobile-plot">', unsafe_allow_html=True)
             st.plotly_chart(figm, use_container_width=True, key="lead_avg_chart")
@@ -445,14 +447,15 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
                 st.caption(f"Total decorrido (soma dos status) para {site_sel}: {int(total)} dias")
                 figs = px.bar(
                     site_df,
-                    x="fase_curta",
-                    y="dias",
+                    y="fase_curta",
+                    x="dias",
+                    orientation="h",
                     title=f"Tempo parado por status (dias) - {site_sel}",
                     text="dias",
                 )
-                figs.update_traces(texttemplate="%{text:.0f}")
-                figs.update_yaxes(title="Dias")
-                figs.update_xaxes(title="Status")
+                figs.update_traces(texttemplate="%{text:.0f}", textposition="outside")
+                figs.update_xaxes(title="Dias")
+                figs.update_yaxes(title="Status", categoryorder="array", categoryarray=phase_order)
                 figs = dark(figs)
                 st.markdown('<div class="mobile-plot">', unsafe_allow_html=True)
                 st.plotly_chart(figs, use_container_width=True, key=f"lead_site_chart_{site_sel}")
@@ -1239,9 +1242,9 @@ def page_rollout():
         else:
             keep = Situacao
             long = bars.rename(columns={keep: "valor"})[["fase_curta", "valor"]].assign(tipo=keep)
-        ymax = max(int(bars["total"].max()), 1)
+        xmax = max(int(bars["total"].max()), 1)
         fig = px.bar(
-            long, x="fase_curta", y="valor", color="tipo",
+            long, y="fase_curta", x="valor", color="tipo", orientation="h",
             color_discrete_map={"Concluidos": "#1f77b4", "Faltando": "#ff7f0e"},
             category_orders={
                 "tipo": ["Concluidos", "Faltando"],
@@ -1251,15 +1254,9 @@ def page_rollout():
             barmode="stack" if Situacao == "Ambos" else "relative",
             title=("Sites por status (concluidos x faltando)" + (f" | {_ts_suffix}" if _ts_suffix else "")),
         )
-        
-        
-        fig.update_traces(
-            texttemplate="%{text}",
-            hovertemplate="<b>%{x}</b><br>%{data.name}: <b>%{y}</b><extra></extra>",
-        )
-        fig.update_yaxes(range=[0, ymax * 1.18], title="Quantidade de sites")
-        fig.update_xaxes(title="Status")
-        fig.for_each_trace(lambda t: t.update(textposition="outside") if t.name == "Faltando" else t.update(textposition="inside"))
+        fig.update_traces(texttemplate="%{text}", textposition="outside")
+        fig.update_xaxes(range=[0, xmax * 1.18], title="Quantidade de sites")
+        fig.update_yaxes(title="Status", categoryorder="array", categoryarray=order_short)
         fig = dark(fig)
     else:
         col = "Concluidos" if Situacao == "Concluidos" else "Faltando"
