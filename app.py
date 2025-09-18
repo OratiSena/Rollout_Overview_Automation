@@ -3,6 +3,7 @@
 # ?? Módulos padrão da biblioteca Python
 from pathlib import Path
 from datetime import datetime
+import logging
 
 # ?? Manipulação de dados e visualização
 import pandas as pd
@@ -11,18 +12,19 @@ try:
     import plotly.express as px
     import plotly.graph_objects as go
 except ModuleNotFoundError:
-    import subprocess, sys, logging
+    import subprocess, sys
     result = subprocess.run(
         [sys.executable, "-m", "pip", "install", "plotly==5.24.0"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True,
+        check=False,
     )
+    output = result.stdout.decode('utf-8', errors='ignore') if isinstance(result.stdout, (bytes, bytearray)) else str(result.stdout)
     if result.returncode != 0:
         logging.warning(
             "Fallback pip install plotly failed (%s): %s",
             result.returncode,
-            result.stdout,
+            output,
         )
     import plotly.express as px
     import plotly.graph_objects as go
@@ -1195,4 +1197,8 @@ if st.session_state.route == "rollout":
     page_rollout()
 else:
     page_rollout()
+
+
+
+
 
