@@ -602,9 +602,13 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
 
     for col in df_sel.columns:
         if _looks_date_col(col):
-            ser = pd.to_datetime(df_sel[col], errors="coerce")
-            if ser.notna().sum() > 0:
-                df_sel[col] = ser.dt.strftime("%d-%b-%y").where(ser.notna(), df_sel[col])
+            ser_plain = pd.to_datetime(df_sel[col], errors="coerce")
+            num_vals = pd.to_numeric(df_sel[col], errors="coerce")
+            if num_vals.notna().any():
+                ser_excel = pd.to_datetime(num_vals, unit="D", origin="1899-12-30", errors="coerce")
+                ser_plain = ser_plain.where(num_vals.isna(), ser_excel)
+            if ser_plain.notna().sum() > 0:
+                df_sel[col] = ser_plain.dt.strftime("%d-%b-%y").where(ser_plain.notna(), df_sel[col])
 
     # ---- COMPACTACAO para 2 niveis de exibicao ----
     lvl0, lvl1 = [], []
