@@ -181,12 +181,21 @@ def sites_for_phase_explicit(
         return pd.DataFrame()
 
     def _find_idx_by_name(names: list[str]) -> int | None:
-        header = pd.Series(df_raw.iloc[6]).astype(str).str.strip().str.upper()
-        for nm in names:
-            nm_u = str(nm).strip().upper()
-            hit = header[header == nm_u]
-            if not hit.empty:
-                return int(hit.index[0])
+        header_rows = [6, 5, 7]
+        for ridx in header_rows:
+            if 0 <= ridx < len(df_raw):
+                header = (
+                    pd.Series(df_raw.iloc[ridx])
+                    .astype(str)
+                    .str.replace(' ', ' ', regex=False)
+                    .str.strip()
+                    .str.upper()
+                )
+                for nm in names:
+                    nm_u = str(nm).strip().upper()
+                    hit = header[header == nm_u]
+                    if not hit.empty:
+                        return int(hit.index[0])
         return None
 
     def _one_phase(full: str) -> pd.DataFrame:
