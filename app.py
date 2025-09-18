@@ -334,53 +334,101 @@ def request_reset():
     st.rerun()
 
 
-def render_lead_analysis(df_raw: pd.DataFrame):
-    """Renderiza a secao 'Analise por Site (lead time)'. Independente dos filtros."""
+def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
+    """Renderiza a secao 'Analise por Site (lead time)' respeitando filtros."""
     phase_map = get_explicit_phase_map(df_raw)
      
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     st.markdown("<h2 style='margin: 6px 0 12px 0; font-size: 24px;'>Analise por Site (lead time)</h2>", unsafe_allow_html=True)
     with st.expander("Abrir analise por site", expanded=False):
-        mode = st.radio("Modo", ["Media (todos os sites)", "Site especifico"], horizontal=True, key="site_analysis_mode")
+        options = ["Analise pelos filtros aplicados", "Media (todos os sites)", "Pesquisar Site especifico"]
+        current = st.session_state.get("site_analysis_mode")
+        if current not in options:
+            st.session_state["site_analysis_mode"] = options[0]
+        mode = st.radio("Modo", options, horizontal=True, key="site_analysis_mode")
 
-        stay = etl.stage_stay_days(df_raw)
+        stay = etl.stage_stay_days(df_raw).copy()
+        stay["SITE"] = stay["SITE"].astype(str)
         phase_order = [s for (_f, s, _c) in phase_map]
+        filtered_sites = set(sites_f["SITE"].astype(str)) if not sites_f.empty else set()
+        stay_filtered = stay[stay["SITE"].isin(filtered_sites)] if filtered_sites else stay.iloc[0:0]
 
-        if mode == "Media (todos os sites)":
-            means = {}
+        def _build_mean_df(df_use: pd.DataFrame) -> pd.DataFrame:
+            rows = []
             for s in phase_order:
                 col = f"stay_{s}"
-                if col in stay.columns:
-                    v = pd.to_numeric(stay[col], errors="coerce")
-                    means[s] = float(v.mean(skipna=True)) if hasattr(v, "mean") else 0.0
-            avg_df = pd.DataFrame({"fase_curta": list(means.keys()), "dias": list(means.values())})
-            figm = px.bar(avg_df, x="fase_curta", y="dias", title="Tempo medio parado por status (dias)", text="dias")
+                if col in df_use.columns:
+                    vals = pd.to_numeric(df_use[col], errors="coerce")
+                    val = float(vals.mean(skipna=True)) if vals.notna().any() else 0.0
+                else:
+                    val = 0.0
+                rows.append({"fase_curta": s, "dias": val})
+            return pd.DataFrame(rows)
+
+        if mode == "Analise pelos filtros aplicados":
+            if stay_filtered.empty:
+                st.info("Nenhum site restante com os filtros atuais.")
+            else:
+                avg_df = _build_mean_df(stay_filtered)
+                figm = px.bar(
+                    avg_df,
+                    x="fase_curta",
+                    y="dias",
+                    title=f"Tempo medio parado por status (dias) | {len(stay_filtered)} site(s)",
+                    text="dias",
+                )
+                figm.update_traces(texttemplate="%{text:.1f}")
+                figm.update_yaxes(title="Dias (media)")
+                figm.update_xaxes(title="Status")
+                figm = dark(figm)
+                st.plotly_chart(figm, use_container_width=True, key="lead_filtered_chart")
+        elif mode == "Media (todos os sites)":
+            avg_df = _build_mean_df(stay)
+            figm = px.bar(
+                avg_df,
+                x="fase_curta",
+                y="dias",
+                title=f"Tempo medio parado por status (dias) | {len(stay)} site(s)",
+                text="dias",
+            )
             figm.update_traces(texttemplate="%{text:.1f}")
             figm.update_yaxes(title="Dias (media)")
             figm.update_xaxes(title="Status")
             figm = dark(figm)
             st.plotly_chart(figm, use_container_width=True, key="lead_avg_chart")
         else:
-            uniq_sites = sorted(stay["SITE"].dropna().astype(str).unique().tolist())
+            uniq_all = sorted(stay["SITE"].dropna().astype(str).unique().tolist())
+            default_pool = sorted(filtered_sites) if filtered_sites else uniq_all
             q_site = st.text_input("Pesquisar SITE", placeholder="Digite parte do SITE...")
-            matches = [s for s in uniq_sites if q_site.strip().lower() in s.lower()] if q_site else []
+            if q_site:
+                matches = [s for s in uniq_all if q_site.strip().lower() in s.lower()]
+            else:
+                matches = default_pool
             site_sel = st.selectbox("Selecionar SITE", matches, index=0) if matches else None
-            if not matches and q_site:
-                st.info("Nenhum SITE encontrado para a pesquisa.")
-
+            if not matches:
+                if q_site:
+                    st.info("Nenhum SITE encontrado para a pesquisa.")
+                elif not filtered_sites:
+                    st.info("Nenhum SITE filtrado disponivel no momento.")
             if site_sel:
                 row = stay[stay["SITE"].astype(str) == str(site_sel)].head(1)
                 data = []
-                total = 0
+                total = 0.0
                 for s in phase_order:
                     col = f"stay_{s}"
                     if col in row.columns:
                         val = float(pd.to_numeric(row[col], errors="coerce").fillna(0).iloc[0])
                         data.append({"fase_curta": s, "dias": val})
-                        total += max(val, 0)
+                        total += max(val, 0.0)
                 site_df = pd.DataFrame(data)
                 st.caption(f"Total decorrido (soma dos status) para {site_sel}: {int(total)} dias")
-                figs = px.bar(site_df, x="fase_curta", y="dias", title=f"Tempo parado por status (dias) - {site_sel}", text="dias")
+                figs = px.bar(
+                    site_df,
+                    x="fase_curta",
+                    y="dias",
+                    title=f"Tempo parado por status (dias) - {site_sel}",
+                    text="dias",
+                )
                 figs.update_traces(texttemplate="%{text:.0f}")
                 figs.update_yaxes(title="Dias")
                 figs.update_xaxes(title="Status")
@@ -806,7 +854,7 @@ def page_rollout():
     # Visualizacao por Status (unica secao atual)
     if not st.session_state.get("show_status", True):
         if st.session_state.get("show_lead", True):
-            render_lead_analysis(df_raw)
+            render_lead_analysis(df_raw, sites_f)
         return
     
     # Titulo grande para a secao
@@ -1257,7 +1305,7 @@ def page_rollout():
 
     # ========== 7) Analise de lead time ==========
     if st.session_state.get("show_lead", True):
-        render_lead_analysis(df_raw)
+        render_lead_analysis(df_raw, sites_f)
         
         
         
