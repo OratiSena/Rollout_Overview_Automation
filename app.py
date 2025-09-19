@@ -144,7 +144,7 @@ st.markdown(
         min-width: 720px;
     }
 }
-#language-switcher {
+#gtranslate_wrapper {
     position: fixed;
     top: 10px;
     right: 160px;
@@ -152,7 +152,7 @@ st.markdown(
     display: flex;
     gap: 6px;
 }
-#language-switcher button {
+#gtranslate_wrapper button {
     background-color: #1f77b4;
     border: none;
     color: white;
@@ -161,7 +161,7 @@ st.markdown(
     font-size: 12px;
     cursor: pointer;
 }
-#language-switcher button:hover {
+#gtranslate_wrapper button:hover {
     background-color: #13507a;
 }
 
@@ -387,48 +387,45 @@ def request_reset():
     st.rerun()
 
 
+
 def render_language_switcher():
-    if st.session_state.get('_lang_switcher_rendered'):
-        return
-    html = """
-    <div id='language-switcher'>
-        <button onclick=\"doGTranslate('pt|pt')\">PT-BR</button>
-        <button onclick=\"doGTranslate('pt|en')\">EN</button>
-        <button onclick=\"doGTranslate('pt|zh-CN')\">中文</button>
-    </div>
-    <div id='google_translate_element' style='display:none;'></div>
-    <script type='text/javascript'>
-    function googleTranslateElementInit() {
-        new google.translate.TranslateElement({pageLanguage: "pt", includedLanguages: "pt,en,zh-CN", autoDisplay: false}, "google_translate_element");
-    }
-    </script>
-    <script type='text/javascript'>
-    function loadGoogleTranslateScript() {
-        var s = document.createElement('script');
-        s.type = "text/javascript";
-        s.src = "https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
-        document.body.appendChild(s);
-    }
-    if (!(window.google && google.translate)) {
-        loadGoogleTranslateScript();
-    } else {
-        googleTranslateElementInit();
-    }
-    function doGTranslate(lang_pair) {
-        if (lang_pair === "") return;
-        var lang = lang_pair.split("|")[1];
-        var select = document.querySelector("#google_translate_element select");
-        if (!select) {
-            setTimeout(function(){ doGTranslate(lang_pair); }, 500);
-            return;
+    components.html("""
+        <div id='gtranslate_wrapper'>
+            <button onclick=\"GTranslate('pt|pt')\">PT-BR</button>
+            <button onclick=\"GTranslate('pt|en')\">EN</button>
+            <button onclick=\"GTranslate('pt|zh-CN')\">中文</button>
+        </div>
+        <div id='google_translate_element' style='display:none;'></div>
+        <style>
+            .goog-te-banner-frame.skiptranslate {display:none !important;}
+            body {top: 0 !important;}
+            .goog-logo-link, .goog-te-gadget {display:none !important;}
+        </style>
+        <script type='text/javascript'>
+        function googleTranslateElementInit() {
+            new google.translate.TranslateElement({pageLanguage: 'pt', includedLanguages: 'pt,en,zh-CN', autoDisplay: false}, 'google_translate_element');
         }
-        select.value = lang;
-        select.dispatchEvent(new Event("change"));
-    }
-    </script>
-    """
-    components.html(html, height=0, width=0, scrolling=False)
-    st.session_state['_lang_switcher_rendered'] = True
+        if (!(window.google && google.translate)) {
+            var gts = document.createElement('script');
+            gts.type = 'text/javascript';
+            gts.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+            document.head.appendChild(gts);
+        } else {
+            googleTranslateElementInit();
+        }
+        function GTranslate(lang_pair) {
+            if (lang_pair === '') return;
+            var lang = lang_pair.split('|')[1];
+            var select = document.querySelector('select.goog-te-combo');
+            if (!select) {
+                setTimeout(function(){ GTranslate(lang_pair); }, 500);
+            } else {
+                select.value = lang;
+                select.dispatchEvent(new Event('change'));
+            }
+        }
+        </script>
+        """, height=0, width=0, scrolling=False)
 
 
 def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
