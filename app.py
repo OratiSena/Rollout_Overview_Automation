@@ -113,7 +113,7 @@ st.markdown(
     """
     <style>
 .chart-mobile {
-    display: none;
+    display: none !important;
 }
 @media (max-width: 768px) {
     .chart-desktop {
