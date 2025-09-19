@@ -112,21 +112,25 @@ ACCENT = "#F74949"
 st.markdown(
     """
     <style>
-.chart-mobile {
+.chart-desktop-marker,
+.chart-mobile-marker {
+    display: none !important;
+}
+.chart-mobile-marker + div[data-testid='stPlotlyChart'] {
     display: none !important;
 }
 @media (max-width: 768px) {
-    .chart-desktop {
+    .chart-desktop-marker + div[data-testid='stPlotlyChart'] {
         display: none !important;
     }
-    .chart-mobile {
+    .chart-mobile-marker + div[data-testid='stPlotlyChart'] {
         display: block !important;
     }
-    .mobile-plot {
+    .chart-mobile-marker.mobile-plot + div[data-testid='stPlotlyChart'] {
         overflow-x: auto;
         padding-bottom: 8px;
     }
-    .mobile-plot div[data-testid='stPlotlyChart'] {
+    .chart-mobile-marker.mobile-plot + div[data-testid='stPlotlyChart'] .js-plotly-plot {
         min-width: 620px;
     }
     .mobile-scroll {
@@ -361,19 +365,17 @@ def request_reset():
 
 
 def _render_dual_chart(fig_desktop, fig_mobile, key_base: str, wrap_mobile: bool = True):
-    """Renderiza um par de gráficos (desktop/mobile) com chaves isoladas."""
+    """Renderiza um par de graficos (desktop/mobile) com chaves isoladas."""
     if fig_desktop is not None:
-        st.markdown('<div class="chart-desktop">', unsafe_allow_html=True)
+        st.markdown('<span class="chart-desktop-marker"></span>', unsafe_allow_html=True)
         st.plotly_chart(fig_desktop, use_container_width=True, key=f"{key_base}_desktop")
-        st.markdown('</div>', unsafe_allow_html=True)
     if fig_mobile is not None:
-        classes = ['chart-mobile']
+        classes = ['chart-mobile-marker']
         if wrap_mobile:
             classes.append('mobile-plot')
         class_attr = ' '.join(classes)
-        st.markdown(f"<div class='{class_attr}'>", unsafe_allow_html=True)
+        st.markdown(f"<span class='{class_attr}'></span>", unsafe_allow_html=True)
         st.plotly_chart(fig_mobile, use_container_width=True, key=f"{key_base}_mobile")
-        st.markdown('</div>', unsafe_allow_html=True)
 
 
 def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
@@ -797,7 +799,7 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
         st.dataframe(df_view, use_container_width=True, height=520, column_config=colcfg)
     except Exception:
         st.dataframe(df_view, use_container_width=True, height=520)
-    st.markdown('</div>', unsafe_allow_html=True)
+
 
     # ---- Download (achatado) ----
     df_xlsx = df_sel.copy()
@@ -959,7 +961,7 @@ def page_rollout():
             kpi[["fase_curta", "Concluidos", "faltam", "total"]].set_index("fase_curta"),
             use_container_width=True,
         )
-        st.markdown('</div>', unsafe_allow_html=True)
+
     
     
     
@@ -1406,7 +1408,7 @@ def page_rollout():
 
     st.markdown('<div class="mobile-scroll">', unsafe_allow_html=True)
     st.dataframe(table_df.reset_index(drop=True)[cols_order], use_container_width=True, height=430)
-    st.markdown('</div>', unsafe_allow_html=True)
+
 
 
 
