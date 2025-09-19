@@ -1,14 +1,14 @@
 # Streamlit app dependencies
-streamlit==1.37.0
+streamlit==1.49.1
 streamlit-antd-components==0.3.2
 plotly==6.3.0
 
 # Data processing stack
-pandas==2.2.2
+pandas==2.3.2
 openpyxl==3.1.5
 pyxlsb==1.0.10
 python-dateutil==2.9.0
 
 # Microsoft Graph and HTTP
-msal==1.28.0
-requests==2.32.3
+msal==1.33.0
+requests==2.32.5
