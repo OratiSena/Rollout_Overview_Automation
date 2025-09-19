@@ -86,17 +86,22 @@ _ensure_package("pyxlsb", "pyxlsb==1.0.10")
 MOBILE_BREAKPOINT = 768
 
 
-def _is_mobile_viewport() -> bool:
-    width = streamlit_js_eval(js_expressions="window.innerWidth", key="viewport_width")
+def _get_viewport_width():
+    if "_viewport_width" in st.session_state:
+        return st.session_state.get("_viewport_width")
+    width = streamlit_js_eval(js_expressions="window.innerWidth", key="__viewport_width__")
     if width is None:
-        width = st.session_state.get("_viewport_width")
-    else:
-        try:
-            width = float(width)
-        except (TypeError, ValueError):
-            width = None
-        else:
-            st.session_state["_viewport_width"] = width
+        return None
+    try:
+        width = float(width)
+    except (TypeError, ValueError):
+        return None
+    st.session_state["_viewport_width"] = width
+    return width
+
+
+def _is_mobile_viewport() -> bool:
+    width = _get_viewport_width()
     return bool(width) and width <= MOBILE_BREAKPOINT
 
 import plotly.express as px
