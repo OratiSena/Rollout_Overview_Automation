@@ -401,6 +401,8 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
 
         def _build_bar(df_source: pd.DataFrame, title: str, text_fmt: str = ".1f", value_label: str = "Dias (media)") -> go.Figure:
             text_template = f"%{{text:{text_fmt}}}"
+            max_val = float(df_source["dias"].max()) if not df_source.empty else 0.0
+            pad_val = max_val * 0.1
             if is_mobile:
                 fig = px.bar(
                     df_source,
@@ -410,9 +412,9 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
                     text="dias",
                     title=title,
                 )
-                fig.update_traces(texttemplate=text_template, textposition="outside")
-                fig.update_xaxes(title=value_label)
-                fig.update_yaxes(title="Status", categoryorder="array", categoryarray=phase_order)
+                fig.update_traces(texttemplate=text_template, textposition="outside", textangle=0)
+                fig.update_xaxes(title=value_label, range=[0, max_val + pad_val])
+                fig.update_yaxes(title="Status", categoryorder="array", categoryarray=phase_order, autorange="reversed")
             else:
                 fig = px.bar(
                     df_source,
@@ -421,8 +423,9 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
                     text="dias",
                     title=title,
                 )
-                fig.update_traces(texttemplate=text_template)
-                fig.update_yaxes(title=value_label)
+                ymax = (max_val * 1.18) if max_val else 1
+                fig.update_traces(texttemplate=text_template, textangle=0)
+                fig.update_yaxes(title=value_label, range=[0, ymax])
                 fig.update_xaxes(title="Status")
             return dark(fig)
 
@@ -1257,6 +1260,8 @@ def page_rollout():
         else:
             keep = Situacao
             long = bars.rename(columns={keep: "valor"})[["fase_curta", "valor"]].assign(tipo=keep)
+        max_total = float(bars["total"].max()) if not bars.empty else 0.0
+        pad_total = max_total * 0.1
         is_mobile_chart = _is_mobile_viewport()
         if is_mobile_chart:
             fig = px.bar(
@@ -1271,11 +1276,11 @@ def page_rollout():
                 barmode="stack" if Situacao == "Ambos" else "relative",
                 title=("Sites por status (concluidos x faltando)" + (f" | {_ts_suffix}" if _ts_suffix else "")),
             )
-            fig.update_traces(texttemplate="%{text}", textposition="outside")
-            fig.update_xaxes(title="Quantidade de sites")
-            fig.update_yaxes(title="Status", categoryorder="array", categoryarray=order_short)
+            fig.update_traces(texttemplate="%{text}", textposition="outside", textangle=0)
+            fig.update_xaxes(title="Quantidade de sites", range=[0, max_total + pad_total])
+            fig.update_yaxes(title="Status", categoryorder="array", categoryarray=order_short, autorange="reversed")
         else:
-            ymax = max(int(bars["total"].max()), 1) * 1.18
+            ymax = (max_total * 1.18) if max_total else 1
             fig = px.bar(
                 long,
                 x="fase_curta",
@@ -1287,11 +1292,13 @@ def page_rollout():
                 barmode="stack" if Situacao == "Ambos" else "relative",
                 title=("Sites por status (concluidos x faltando)" + (f" | {_ts_suffix}" if _ts_suffix else "")),
             )
-            fig.update_traces(texttemplate="%{text}")
+            fig.update_traces(texttemplate="%{text}", textangle=0)
             fig.update_yaxes(title="Quantidade de sites", range=[0, ymax])
             fig.update_xaxes(title="Status")
             fig.for_each_trace(lambda t: t.update(textposition="outside") if t.name == "Faltando" else t.update(textposition="inside"))
         fig = dark(fig)
+
+
     if fig is not None:
         st.plotly_chart(fig, use_container_width=True, key="status_main_chart")
 
