@@ -111,6 +111,7 @@ import plotly.graph_objects as go
 # Interface web com Streamlit
 import streamlit as st
 from streamlit_js_eval import streamlit_js_eval
+import streamlit.components.v1 as components
 
 # Modulo local (certifique-se de que o diretorio 'core' esta no mesmo nivel do script)
 import core.etl_rollout as etl
@@ -142,6 +143,26 @@ st.markdown(
     .mobile-scroll div[data-testid='stDataFrame'] {
         min-width: 720px;
     }
+}
+#language-switcher {
+    position: fixed;
+    top: 10px;
+    right: 160px;
+    z-index: 1000;
+    display: flex;
+    gap: 6px;
+}
+#language-switcher button {
+    background-color: #1f77b4;
+    border: none;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+}
+#language-switcher button:hover {
+    background-color: #13507a;
 }
 
     section[data-testid="stSidebar"] [data-testid="stCheckbox"],
@@ -364,6 +385,50 @@ def request_reset():
     """Marca reset pendente e forca novo ciclo de execucao."""
     st.session_state["__do_reset__"] = True
     st.rerun()
+
+
+def render_language_switcher():
+    if st.session_state.get('_lang_switcher_rendered'):
+        return
+    html = """
+    <div id='language-switcher'>
+        <button onclick=\"doGTranslate('pt|pt')\">PT-BR</button>
+        <button onclick=\"doGTranslate('pt|en')\">EN</button>
+        <button onclick=\"doGTranslate('pt|zh-CN')\">中文</button>
+    </div>
+    <div id='google_translate_element' style='display:none;'></div>
+    <script type='text/javascript'>
+    function googleTranslateElementInit() {
+        new google.translate.TranslateElement({pageLanguage: "pt", includedLanguages: "pt,en,zh-CN", autoDisplay: false}, "google_translate_element");
+    }
+    </script>
+    <script type='text/javascript'>
+    function loadGoogleTranslateScript() {
+        var s = document.createElement('script');
+        s.type = "text/javascript";
+        s.src = "https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
+        document.body.appendChild(s);
+    }
+    if (!(window.google && google.translate)) {
+        loadGoogleTranslateScript();
+    } else {
+        googleTranslateElementInit();
+    }
+    function doGTranslate(lang_pair) {
+        if (lang_pair === "") return;
+        var lang = lang_pair.split("|")[1];
+        var select = document.querySelector("#google_translate_element select");
+        if (!select) {
+            setTimeout(function(){ doGTranslate(lang_pair); }, 500);
+            return;
+        }
+        select.value = lang;
+        select.dispatchEvent(new Event("change"));
+    }
+    </script>
+    """
+    components.html(html, height=0, width=0, scrolling=False)
+    st.session_state['_lang_switcher_rendered'] = True
 
 
 def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
@@ -796,6 +861,7 @@ def page_rollout():
         st.session_state["escopo"] = "Ambos"
         st.session_state["sel_phase_full"] = "Todas"
         st.session_state["__do_reset__"] = False
+    render_language_switcher()
     st.title("Rollout Claro RAN - Overview")
     st.caption("Suba o Excel (.xlsb, .xlsx) e acompanhe KPIs e detalhamento por status.")
 
