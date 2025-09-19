@@ -412,8 +412,8 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
                     text="dias",
                     title=title,
                 )
-                fig.update_traces(texttemplate=text_template, textposition="outside", textangle=0)
-                fig.update_xaxes(title=value_label, range=[0, max_val + pad_val])
+                fig.update_traces(texttemplate=text_template, textposition="outside", textangle=0, textfont=dict(size=13))
+                fig.update_xaxes(title=value_label, range=[0, max_val + max(pad_val, 5)])
                 fig.update_yaxes(title="Status", categoryorder="array", categoryarray=phase_order, autorange="reversed")
             else:
                 fig = px.bar(
@@ -424,7 +424,7 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
                     title=title,
                 )
                 ymax = (max_val * 1.18) if max_val else 1
-                fig.update_traces(texttemplate=text_template, textangle=0)
+                fig.update_traces(texttemplate=text_template, textangle=0, textfont=dict(size=12))
                 fig.update_yaxes(title=value_label, range=[0, ymax])
                 fig.update_xaxes(title="Status")
             return dark(fig)
@@ -1276,8 +1276,8 @@ def page_rollout():
                 barmode="stack" if Situacao == "Ambos" else "relative",
                 title=("Sites por status (concluidos x faltando)" + (f" | {_ts_suffix}" if _ts_suffix else "")),
             )
-            fig.update_traces(texttemplate="%{text}", textposition="outside", textangle=0)
-            fig.update_xaxes(title="Quantidade de sites", range=[0, max_total + pad_total])
+            fig.update_traces(texttemplate="%{text}", textposition="outside", textangle=0, textfont=dict(size=12))
+            fig.update_xaxes(title="Quantidade de sites", range=[0, max_total + max(pad_total, 5)])
             fig.update_yaxes(title="Status", categoryorder="array", categoryarray=order_short, autorange="reversed")
         else:
             ymax = (max_total * 1.18) if max_total else 1
