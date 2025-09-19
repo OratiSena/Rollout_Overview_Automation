@@ -111,7 +111,6 @@ import plotly.graph_objects as go
 # Interface web com Streamlit
 import streamlit as st
 from streamlit_js_eval import streamlit_js_eval
-import streamlit.components.v1 as components
 
 # Modulo local (certifique-se de que o diretorio 'core' esta no mesmo nivel do script)
 import core.etl_rollout as etl
@@ -143,26 +142,6 @@ st.markdown(
     .mobile-scroll div[data-testid='stDataFrame'] {
         min-width: 720px;
     }
-}
-#gtranslate_wrapper {
-    position: fixed;
-    top: 10px;
-    right: 160px;
-    z-index: 1000;
-    display: flex;
-    gap: 6px;
-}
-#gtranslate_wrapper button {
-    background-color: #1f77b4;
-    border: none;
-    color: white;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    cursor: pointer;
-}
-#gtranslate_wrapper button:hover {
-    background-color: #13507a;
 }
 
     section[data-testid="stSidebar"] [data-testid="stCheckbox"],
@@ -387,45 +366,6 @@ def request_reset():
     st.rerun()
 
 
-
-def render_language_switcher():
-    components.html("""
-        <div id='gtranslate_wrapper'>
-            <button onclick=\"GTranslate('pt|pt')\">PT-BR</button>
-            <button onclick=\"GTranslate('pt|en')\">EN</button>
-            <button onclick=\"GTranslate('pt|zh-CN')\">中文</button>
-        </div>
-        <div id='google_translate_element' style='display:none;'></div>
-        <style>
-            .goog-te-banner-frame.skiptranslate {display:none !important;}
-            body {top: 0 !important;}
-            .goog-logo-link, .goog-te-gadget {display:none !important;}
-        </style>
-        <script type='text/javascript'>
-        function googleTranslateElementInit() {
-            new google.translate.TranslateElement({pageLanguage: 'pt', includedLanguages: 'pt,en,zh-CN', autoDisplay: false}, 'google_translate_element');
-        }
-        if (!(window.google && google.translate)) {
-            var gts = document.createElement('script');
-            gts.type = 'text/javascript';
-            gts.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
-            document.head.appendChild(gts);
-        } else {
-            googleTranslateElementInit();
-        }
-        function GTranslate(lang_pair) {
-            if (lang_pair === '') return;
-            var lang = lang_pair.split('|')[1];
-            var select = document.querySelector('select.goog-te-combo');
-            if (!select) {
-                setTimeout(function(){ GTranslate(lang_pair); }, 500);
-            } else {
-                select.value = lang;
-                select.dispatchEvent(new Event('change'));
-            }
-        }
-        </script>
-        """, height=0, width=0, scrolling=False)
 
 
 def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
@@ -858,7 +798,6 @@ def page_rollout():
         st.session_state["escopo"] = "Ambos"
         st.session_state["sel_phase_full"] = "Todas"
         st.session_state["__do_reset__"] = False
-    render_language_switcher()
     st.title("Rollout Claro RAN - Overview")
     st.caption("Suba o Excel (.xlsb, .xlsx) e acompanhe KPIs e detalhamento por status.")
 
