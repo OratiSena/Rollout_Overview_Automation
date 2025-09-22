@@ -208,28 +208,28 @@ with st.sidebar:
 
     st.markdown("<div style='color:#9aa0a6; font-weight:600; font-size:13px; margin:6px 0 8px; display:flex; align-items:center;'>Automacoes<div style='flex:1; border-top:1px solid #3a3f44; margin-left:8px;'></div></div>", unsafe_allow_html=True)
 
-    route_map = {"Rollout": "rollout", "Integracao": "integracao"}
-    labels = list(route_map.keys())
-    current_label = next((lbl for lbl, key in route_map.items() if key == st.session_state.route), labels[0])
-    selected_label = st.radio(
-        "Automacoes",
-        labels,
-        index=labels.index(current_label),
-        key="nav_route_selector",
-        horizontal=True,
-        label_visibility="collapsed",
-    )
-    st.session_state.route = route_map[selected_label]
+    st.session_state.setdefault("exp_rollout", st.session_state.route == "rollout")
+    st.session_state.setdefault("exp_integracao", st.session_state.route == "integracao")
 
-    with st.expander("Rollout", expanded=(st.session_state.route == "rollout")):
+    with st.expander("Rollout", expanded=st.session_state.exp_rollout, key="exp_rollout"):
         st.checkbox("Visualizacao por Status", key="show_status")
         st.checkbox("Analise por Site (lead time)", key="show_lead")
         st.checkbox("Tabela Fiel/Real", key="show_fiel")
 
-    with st.expander("Integracao", expanded=(st.session_state.route == "integracao")):
+    with st.expander("Integracao", expanded=st.session_state.exp_integracao, key="exp_integracao"):
         st.markdown("<div style='font-size:13px;'>Visualizacoes da integracao em desenvolvimento.</div>", unsafe_allow_html=True)
 
-
+    if st.session_state.get("exp_integracao"):
+        if st.session_state.route != "integracao":
+            st.session_state.route = "integracao"
+        st.session_state.exp_rollout = False
+    elif st.session_state.get("exp_rollout"):
+        if st.session_state.route != "rollout":
+            st.session_state.route = "rollout"
+        st.session_state.exp_integracao = False
+    else:
+        st.session_state.exp_rollout = True
+        st.session_state.route = "rollout"
 
     st.markdown("---")
     st.markdown("<div style='text-align:center; color:#9aa0a6; font-size:12px;'>Centro de Automacao - Claro</div>", unsafe_allow_html=True)

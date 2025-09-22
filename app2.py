@@ -15,14 +15,18 @@ SHEET_URL_ENV = "INTEGRACAO_SHEET_URL"
 SHEET_URL_SECRET_KEY = "integracao_sheet_url"
 
 
+
 def _resolve_sheet_url() -> Optional[str]:
     """Resolve a URL da planilha a partir de secrets ou variavel de ambiente."""
+    secret_val: Optional[str] = None
     try:
-        secret_val = st.secrets.get(SHEET_URL_SECRET_KEY)  # type: ignore[attr-defined]
+        secrets_dict = st.secrets  # type: ignore[attr-defined]
+        if secrets_dict and SHEET_URL_SECRET_KEY in secrets_dict:
+            secret_val = str(secrets_dict[SHEET_URL_SECRET_KEY])
     except Exception:
         secret_val = None
     if secret_val:
-        return str(secret_val)
+        return secret_val
     env_val = os.getenv(SHEET_URL_ENV)
     if env_val:
         return env_val
