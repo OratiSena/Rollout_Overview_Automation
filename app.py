@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 
 # Modulos padrao da biblioteca Python
 from pathlib import Path
@@ -190,6 +190,7 @@ def _nav_item_removed(*_args, **_kwargs):
     # de navegacao. Nao e usado na execucao atual.
     pass
 
+
 with st.sidebar:
     # Logo ZTE centralizada (tamanho medio)
     try:
@@ -206,7 +207,6 @@ with st.sidebar:
     st.session_state.setdefault("show_lead", True)
     st.session_state.setdefault("show_fiel", True)
 
-
     st.markdown(
         "<div style='color:#9aa0a6; font-weight:600; font-size:13px; margin:6px 0 8px; display:flex; align-items:center;'>Automacoes<div style='flex:1; border-top:1px solid #3a3f44; margin-left:8px;'></div></div>",
         unsafe_allow_html=True,
@@ -215,42 +215,37 @@ with st.sidebar:
     st.markdown(
         """
         <style>
-        .nav-block {margin-bottom: 10px;}
-        .nav-block button {width: 100%; text-align: left; border-radius: 8px; border: 1px solid #32373f;
-            background:#171c24; color:#e5e9f0; font-weight:600; padding:8px 12px; transition: 0.2s all ease;}
-        .nav-block button:hover {border-color:#F74949; color:#fff;}
-        .nav-block.active button {background:#212a3a; border-color:#F74949; color:#fff;}
-        .nav-panel {background:#141923; border:1px solid #2a303a; border-radius:8px; padding:10px 12px; margin-top:6px;}
-        .nav-panel .stCheckbox {margin: 4px 0;}
+        .nav-card {margin-bottom: 12px;}
+        .nav-card button {width: 100%; text-align: left; border-radius: 8px; border: 1px solid #32373f;
+            background:#171c24; color:#e5e9f0; font-weight:600; padding:8px 14px; transition:0.2s all ease;}
+        .nav-card button:hover {border-color:#F74949; color:#fff;}
+        .nav-card.active button {background:#212a3a; border-color:#F74949; color:#fff;}
+        .nav-options {margin-top:6px; padding:10px 14px 6px 18px; border-left:2px solid #2f3541; background:#141b25; border-radius:6px;}
+        .nav-options .stCheckbox {margin:4px 0;}
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-
-    def _nav_block(label: str, route_key: str, body_cb):
-        is_active = st.session_state.route == route_key
-        indicator = "v" if is_active else ">"
-        block = st.container()
-        block.markdown(f"<div class='nav-block{' active' if is_active else ''}'>", unsafe_allow_html=True)
-        clicked = block.button(f"{indicator} {label}", key=f"nav_{route_key}", use_container_width=True)
-        block.markdown("</div>", unsafe_allow_html=True)
-        if clicked:
+    def _nav_card(label: str, route_key: str, render_cb):
+        active = st.session_state.route == route_key
+        container = st.container()
+        container.markdown(f"<div class='nav-card{' active' if active else ''}'>", unsafe_allow_html=True)
+        if container.button(label, key=f"nav_btn_{route_key}", use_container_width=True):
             st.session_state.route = route_key
-            is_active = True
-        if is_active:
+            active = True
+        container.markdown("</div>", unsafe_allow_html=True)
+        if active:
             panel = st.container()
-            panel.markdown("<div class='nav-panel'>", unsafe_allow_html=True)
-            body_cb(panel)
+            panel.markdown("<div class='nav-options'>", unsafe_allow_html=True)
+            render_cb(panel)
             panel.markdown("</div>", unsafe_allow_html=True)
-
 
     def _render_rollout(panel):
         with panel:
             st.checkbox("Visualizacao por Status", key="show_status")
             st.checkbox("Analise por Site (lead time)", key="show_lead")
             st.checkbox("Tabela Fiel/Real", key="show_fiel")
-
 
     def _render_integracao(panel):
         with panel:
@@ -259,11 +254,13 @@ with st.sidebar:
                 unsafe_allow_html=True,
             )
 
-
-    _nav_block("Rollout", "rollout", _render_rollout)
-    _nav_block("Integracao", "integracao", _render_integracao)
+    _nav_card("Rollout", "rollout", _render_rollout)
+    _nav_card("Integracao", "integracao", _render_integracao)
     st.markdown("---")
-    st.markdown("<div style='text-align:center; color:#9aa0a6; font-size:12px;'>Centro de Automacao - Claro</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div style='text-align:center; color:#9aa0a6; font-size:12px;'>Centro de Automacao - Claro</div>",
+        unsafe_allow_html=True,
+    )
 @st.cache_data(show_spinner=False)
 def read_excel_no_header(path: Path) -> pd.DataFrame:
     # header=None preserva as 7 linhas do topo (KPIs na linha 6)

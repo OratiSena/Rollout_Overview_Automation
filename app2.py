@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from io import BytesIO
 import os
 from typing import Optional
@@ -20,19 +21,36 @@ def _resolve_sheet_url() -> Optional[str]:
     """Resolve a URL da planilha a partir de secrets ou variavel de ambiente."""
     secret_val: Optional[str] = None
     try:
-        secrets_dict = st.secrets  # type: ignore[attr-defined]
-        if secrets_dict and SHEET_URL_SECRET_KEY in secrets_dict:
-            secret_val = str(secrets_dict[SHEET_URL_SECRET_KEY])
+        secrets_obj = getattr(st, "secrets", None)
+        if secrets_obj:
+            if isinstance(secrets_obj, dict):
+                secret_val = secrets_obj.get(SHEET_URL_SECRET_KEY)
+            else:
+                try:
+                    secret_val = secrets_obj[SHEET_URL_SECRET_KEY]  # type: ignore[index]
+                except Exception:
+                    secret_val = getattr(secrets_obj, SHEET_URL_SECRET_KEY, None)
     except Exception:
         secret_val = None
     if secret_val:
-        return secret_val
+        return str(secret_val)
+
     env_val = os.getenv(SHEET_URL_ENV)
     if env_val:
         return env_val
+
+    try:
+        secrets_path = Path('.streamlit/secrets.toml')
+        if secrets_path.exists():
+            import tomllib
+            data = tomllib.loads(secrets_path.read_text(encoding='utf-8'))
+            sheet_val = data.get(SHEET_URL_SECRET_KEY)
+            if sheet_val:
+                return str(sheet_val)
+    except Exception:
+        pass
+
     return None
-
-
 def _fetch_sheet(timeout: int = 30) -> Optional[pd.DataFrame]:
     """Baixa a planilha de Integracao do Google Sheets como DataFrame."""
     sheet_url = _resolve_sheet_url()
