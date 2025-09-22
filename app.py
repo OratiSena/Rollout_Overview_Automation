@@ -9,6 +9,13 @@ import subprocess
 import sys
 import numpy as np
 try:
+    import streamlit_antd_components as sac
+    HAS_SAC = True
+except Exception:
+    HAS_SAC = False
+    sac = None
+
+try:
     from zoneinfo import ZoneInfo
 except Exception:
     ZoneInfo = None
@@ -173,11 +180,6 @@ DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 SAVED_FILE = DATA_DIR / "rollout.xlsb"  # fallback legacy path
 META_FILE = DATA_DIR / "rollout_meta.json"
-try:
-    import streamlit_antd_components as sac
-    HAS_SAC = True
-except Exception:
-    HAS_SAC = False
 
 
 # ---------------- Sidebar / Navegacao ----------------
@@ -189,6 +191,8 @@ def _nav_item_removed(*_args, **_kwargs):
     # Mantido como stub para compatibilidade com antigos trechos (desativados)
     # de navegacao. Nao e usado na execucao atual.
     pass
+
+
 
 
 with st.sidebar:
@@ -206,56 +210,127 @@ with st.sidebar:
     st.session_state.setdefault("show_status", True)
     st.session_state.setdefault("show_lead", True)
     st.session_state.setdefault("show_fiel", True)
+    st.session_state.setdefault("__nav_tree_index__", None)
 
-    st.markdown(
-        "<div style='color:#9aa0a6; font-weight:600; font-size:13px; margin:6px 0 8px; display:flex; align-items:center;'>Automacoes<div style='flex:1; border-top:1px solid #3a3f44; margin-left:8px;'></div></div>",
-        unsafe_allow_html=True,
+    header_html = (
+        "<div style='color:#9aa0a6; font-weight:600; font-size:13px; "
+        "margin:6px 0 8px; display:flex; align-items:center;'>Automacoes"
+        "<div style='flex:1; border-top:1px solid #3a3f44; margin-left:8px;'></div></div>"
     )
 
-    st.markdown(
-        """
-        <style>
-        .nav-card {margin-bottom: 12px;}
-        .nav-card button {width: 100%; text-align: left; border-radius: 8px; border: 1px solid #32373f;
-            background:#171c24; color:#e5e9f0; font-weight:600; padding:8px 14px; transition:0.2s all ease;}
-        .nav-card button:hover {border-color:#F74949; color:#fff;}
-        .nav-card.active button {background:#212a3a; border-color:#F74949; color:#fff;}
-        .nav-options {margin-top:6px; padding:10px 14px 6px 18px; border-left:2px solid #2f3541; background:#141b25; border-radius:6px;}
-        .nav-options .stCheckbox {margin:4px 0;}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    if HAS_SAC:
+        st.markdown(header_html, unsafe_allow_html=True)
 
-    def _nav_card(label: str, route_key: str, render_cb):
-        active = st.session_state.route == route_key
-        container = st.container()
-        container.markdown(f"<div class='nav-card{' active' if active else ''}'>", unsafe_allow_html=True)
-        if container.button(label, key=f"nav_btn_{route_key}", use_container_width=True):
-            st.session_state.route = route_key
-            active = True
-        container.markdown("</div>", unsafe_allow_html=True)
-        if active:
-            panel = st.container()
-            panel.markdown("<div class='nav-options'>", unsafe_allow_html=True)
-            render_cb(panel)
-            panel.markdown("</div>", unsafe_allow_html=True)
+        tree_items = [
+            sac.TreeItem(
+                "Rollout",
+                icon="appstore",
+                children=[
+                    sac.TreeItem("Visualizacao por Status"),
+                    sac.TreeItem("Analise por Site (lead time)"),
+                    sac.TreeItem("Tabela Fiel/Real"),
+                ],
+            ),
+            sac.TreeItem(
+                "Integracao",
+                icon="cloud",
+                children=[
+                    sac.TreeItem("Visualizacoes da integracao em desenvolvimento.", disabled=True),
+                ],
+            ),
+        ]
 
-    def _render_rollout(panel):
-        with panel:
+        flat_labels: list[str] = []
+
+        def _flatten(items):
+            for item in items:
+                flat_labels.append(item.label)
+                if item.children:
+                    _flatten(item.children)
+
+        _flatten(tree_items)
+        index_lookup = {label: idx for idx, label in enumerate(flat_labels)}
+        rollout_children = [
+            "Visualizacao por Status",
+            "Analise por Site (lead time)",
+            "Tabela Fiel/Real",
+        ]
+
+        default_index = st.session_state.get("__nav_tree_index__")
+        if not default_index:
+            default_index = []
+            default_index.append(index_lookup["Integracao"] if st.session_state.route == "integracao" else index_lookup["Rollout"])
+            for label, flag in zip(rollout_children, [st.session_state.show_status, st.session_state.show_lead, st.session_state.show_fiel]):
+                if flag and label in index_lookup:
+                    default_index.append(index_lookup[label])
+
+        tree_selection = sac.tree(
+            items=tree_items,
+            index=default_index,
+            label="",
+            align="start",
+            size="sm",
+            icon="menu",
+            open_all=True,
+            checkbox=True,
+            checkbox_strict=True,
+            show_line=True,
+            return_index=False,
+            key="nav_tree",
+        )
+
+        prev_labels = {flat_labels[i] for i in default_index if i < len(flat_labels)}
+        selected_labels = set(tree_selection or prev_labels)
+        info_label = "Visualizacoes da integracao em desenvolvimento."
+        selected_labels.discard(info_label)
+
+        if any(label in selected_labels for label in rollout_children):
+            selected_labels.add("Rollout")
+
+        if "Integracao" in selected_labels and "Rollout" in selected_labels:
+            if "Integracao" not in prev_labels:
+                selected_labels.discard("Rollout")
+                st.session_state.route = "integracao"
+            elif "Rollout" not in prev_labels:
+                selected_labels.discard("Integracao")
+                st.session_state.route = "rollout"
+        if "Integracao" not in selected_labels and "Rollout" not in selected_labels:
+            selected_labels.add("Integracao" if st.session_state.route == "integracao" else "Rollout")
+
+        if "Integracao" in selected_labels and "Rollout" in selected_labels:
+            selected_labels.discard("Rollout" if st.session_state.route == "integracao" else "Integracao")
+
+        st.session_state.route = "integracao" if "Integracao" in selected_labels else "rollout"
+
+        st.session_state.show_status = "Visualizacao por Status" in selected_labels
+        st.session_state.show_lead = "Analise por Site (lead time)" in selected_labels
+        st.session_state.show_fiel = "Tabela Fiel/Real" in selected_labels
+
+        st.session_state["__nav_tree_index__"] = sorted(
+            index_lookup[label]
+            for label in selected_labels
+            if label in index_lookup
+        )
+    else:
+        st.markdown(header_html, unsafe_allow_html=True)
+        route_choice = st.radio(
+            "",
+            ["Rollout", "Integracao"],
+            index=0 if st.session_state.route == "rollout" else 1,
+            key="nav_route_radio",
+        )
+        st.session_state.route = route_choice.lower()
+
+        if st.session_state.route == "rollout":
             st.checkbox("Visualizacao por Status", key="show_status")
             st.checkbox("Analise por Site (lead time)", key="show_lead")
             st.checkbox("Tabela Fiel/Real", key="show_fiel")
-
-    def _render_integracao(panel):
-        with panel:
+        else:
             st.markdown(
-                "<div style='font-size:13px;'>Visualizacoes da integracao em desenvolvimento.</div>",
+                "<div style='margin:10px 0; color:#9aa0a6; font-size:13px;'>Visualizacoes da integracao em desenvolvimento.</div>",
                 unsafe_allow_html=True,
             )
 
-    _nav_card("Rollout", "rollout", _render_rollout)
-    _nav_card("Integracao", "integracao", _render_integracao)
     st.markdown("---")
     st.markdown(
         "<div style='text-align:center; color:#9aa0a6; font-size:12px;'>Centro de Automacao - Claro</div>",
