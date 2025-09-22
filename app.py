@@ -114,6 +114,7 @@ from streamlit_js_eval import streamlit_js_eval
 
 # Modulo local (certifique-se de que o diretorio 'core' esta no mesmo nivel do script)
 import core.etl_rollout as etl
+import app2
 
 # Funcoes especificas do modulo etl_rollout
 from core.etl_rollout import (
@@ -199,67 +200,35 @@ with st.sidebar:
     except Exception:
         pass
 
-    # Sidebar: Rollout (expansivel) + checkbox simples
+    # Controle de rotas e sessoes da barra lateral
+    st.session_state.setdefault("route", "rollout")
     st.session_state.setdefault("show_status", True)
     st.session_state.setdefault("show_lead", True)
-    st.markdown("<div style='color:#9aa0a6; font-weight:600; font-size:13px; margin:6px 0 8px; display:flex; align-items:center;'>Automacoes<div style='flex:1; border-top:1px solid #3a3f44; margin-left:8px;'></div></div>", unsafe_allow_html=True)
-    with st.expander("Rollout", expanded=True):
-        st.checkbox("Visualizacao por Status", key="show_status")
+    st.session_state.setdefault("show_fiel", True)
 
-        st.checkbox("Analise por Site (lead time)", key="show_lead")   
-      
-        st.session_state.setdefault("show_fiel", True)
+    st.markdown("<div style='color:#9aa0a6; font-weight:600; font-size:13px; margin:6px 0 8px; display:flex; align-items:center;'>Automacoes<div style='flex:1; border-top:1px solid #3a3f44; margin-left:8px;'></div></div>", unsafe_allow_html=True)
+
+    route_map = {"Rollout": "rollout", "Integracao": "integracao"}
+    labels = list(route_map.keys())
+    current_label = next((lbl for lbl, key in route_map.items() if key == st.session_state.route), labels[0])
+    selected_label = st.radio(
+        "Automacoes",
+        labels,
+        index=labels.index(current_label),
+        key="nav_route_selector",
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+    st.session_state.route = route_map[selected_label]
+
+    with st.expander("Rollout", expanded=(st.session_state.route == "rollout")):
+        st.checkbox("Visualizacao por Status", key="show_status")
+        st.checkbox("Analise por Site (lead time)", key="show_lead")
         st.checkbox("Tabela Fiel/Real", key="show_fiel")
 
-    # Secao e menu no estilo Ant Design
-    st.session_state.setdefault("show_status", True)
-    st.session_state.setdefault("route", "rollout")
-    if False:
-        try:
-            try:
-                sac.divider("Automacoes")
-            except Exception:
-                st.markdown(
-                    "<div style='color:#9aa0a6; font-weight:600; font-size:13px; margin:6px 0 6px;'>Automacoes</div>",
-                    unsafe_allow_html=True,
-                )
+    with st.expander("Integracao", expanded=(st.session_state.route == "integracao")):
+        st.markdown("<div style='font-size:13px;'>Visualizacoes da integracao em desenvolvimento.</div>", unsafe_allow_html=True)
 
-            selected = sac.menu(
-                items=[
-                    sac.MenuItem(
-                        "Rollout",
-                        key="rollout",
-                        children=[
-                            sac.MenuItem("Visualizacao por Status", icon="bar-chart", key="rollout_status"),
-                        ],
-                    ),
-                ],
-                open_all=True,
-                index=1,  # seleciona o primeiro filho
-            )
-            # Normaliza retorno
-            sel_key = selected if isinstance(selected, str) else getattr(selected, "key", str(selected))
-            if sel_key in ("rollout", "rollout_status"):
-                st.session_state.route = "rollout"
-                st.session_state.show_status = True
-        except Exception:
-
-            _nav_item_removed("Rollout", "rollout", indent=0)
-            if "show_status" not in st.session_state:
-                st.session_state["show_status"] = True
-
-            st.checkbox("Visualizacao por Status", key="show_status")
-    if False:
-        # Fallback simples com o mesmo visual hierarquico
-        st.markdown(
-            "<div style='color:#9aa0a6; font-weight:600; font-size:13px; margin:6px 0 6px;'>Automacoes</div>",
-            unsafe_allow_html=True,
-        )
-        _nav_item_removed("Rollout", "rollout", indent=0)
-        if "show_status" not in st.session_state:
-            st.session_state["show_status"] = True
-
-        st.checkbox("Visualizacao por Status", key="show_status")
 
 
     st.markdown("---")
@@ -1379,7 +1348,8 @@ def page_rollout():
 
 
 # ---------------- Router ----------------
-if st.session_state.route == "rollout": 
-    page_rollout()
+current_route = st.session_state.get("route", "rollout")
+if current_route == "integracao":
+    app2.page_integracao()
 else:
     page_rollout()
