@@ -115,15 +115,6 @@ def page_integracao() -> None:
     if status_filter:
         df = df[df["4G Status"].isin(status_filter)]
 
-    # Tabela Fiel
-    st.markdown(
-        """
-        <h2 style='margin: 12px 0; font-size: 24px;'>Tabela Fiel</h2>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.dataframe(df.head(50), use_container_width=True)
-
     # Status de Integração
     st.markdown(
         """
@@ -133,11 +124,12 @@ def page_integracao() -> None:
     )
 
     # Resumo dos status
-    status_summary = summarize_status(df)
+    status_summary = df[["Integration date", "MOS", "General Status", "4G Status", "2G Status"]]
+    st.dataframe(status_summary, use_container_width=True)
 
     # Gráfico de status
     fig = px.bar(
-        status_summary,
+        summarize_status(df),
         x="Status",
         y="Count",
         title="Resumo do Status 4G",
@@ -147,5 +139,11 @@ def page_integracao() -> None:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # Tabela de resumo
-    st.dataframe(status_summary, use_container_width=True)
+    # Tabela Fiel
+    st.markdown(
+        """
+        <h2 style='margin: 12px 0; font-size: 24px;'>Tabela Fiel</h2>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.dataframe(df, use_container_width=True)
