@@ -135,7 +135,7 @@ from core.etl_rollout import (
 
 
 # Page setup and theme accents
-st.set_page_config(page_title="Centro de Automacao", layout="wide")
+st.set_page_config(page_title="Centro de Automação", layout="wide")
 ACCENT = "#F74949"
 
 # Global CSS for sidebar minor tweaks (indent child items)
@@ -196,146 +196,107 @@ def _nav_item_removed(*_args, **_kwargs):
 
 
 with st.sidebar:
-    # Logo ZTE centralizada (tamanho medio)
+    # --- Logo ---
     try:
         if Path("zte-logo.png").exists():
-            _c1, _c2, _c3 = st.columns([1, 2, 1])
-            with _c2:
+            c1, c2, c3 = st.columns([1, 2, 1])
+            with c2:
                 st.image("zte-logo.png", width=140)
     except Exception:
         pass
 
-    # Controle de rotas e sessoes da barra lateral
+    # --- Estados ---
     st.session_state.setdefault("route", "rollout")
     st.session_state.setdefault("show_status", True)
     st.session_state.setdefault("show_lead", True)
     st.session_state.setdefault("show_fiel", True)
-    st.session_state.setdefault("__nav_tree_index__", None)
 
-    header_html = (
-        "<div style='color:#9aa0a6; font-weight:600; font-size:13px; "
-        "margin:6px 0 8px; display:flex; align-items:center;'>Automacoes"
-        "<div style='flex:1; border-top:1px solid #3a3f44; margin-left:8px;'></div></div>"
-    )
-
-    if HAS_SAC:
-        st.markdown(header_html, unsafe_allow_html=True)
-
-        tree_items = [
-            sac.TreeItem(
-                "Rollout",
-                icon="appstore",
-                children=[
-                    sac.TreeItem("Visualizacao por Status"),
-                    sac.TreeItem("Analise por Site (lead time)"),
-                    sac.TreeItem("Tabela Fiel/Real"),
-                ],
-            ),
-            sac.TreeItem(
-                "Integracao",
-                icon="cloud",
-                children=[
-                    sac.TreeItem("Visualizacoes da integracao em desenvolvimento.", disabled=True),
-                ],
-            ),
-        ]
-
-        flat_labels: list[str] = []
-
-        def _flatten(items):
-            for item in items:
-                flat_labels.append(item.label)
-                if item.children:
-                    _flatten(item.children)
-
-        _flatten(tree_items)
-        index_lookup = {label: idx for idx, label in enumerate(flat_labels)}
-        rollout_children = [
-            "Visualizacao por Status",
-            "Analise por Site (lead time)",
-            "Tabela Fiel/Real",
-        ]
-
-        default_index = st.session_state.get("__nav_tree_index__")
-        if not default_index:
-            default_index = []
-            default_index.append(index_lookup["Integracao"] if st.session_state.route == "integracao" else index_lookup["Rollout"])
-            for label, flag in zip(rollout_children, [st.session_state.show_status, st.session_state.show_lead, st.session_state.show_fiel]):
-                if flag and label in index_lookup:
-                    default_index.append(index_lookup[label])
-
-        tree_selection = sac.tree(
-            items=tree_items,
-            index=default_index,
-            label="",
-            align="start",
-            size="sm",
-            icon="menu",
-            open_all=True,
-            checkbox=True,
-            checkbox_strict=True,
-            show_line=True,
-            return_index=False,
-            key="nav_tree",
-        )
-
-        prev_labels = {flat_labels[i] for i in default_index if i < len(flat_labels)}
-        selected_labels = set(tree_selection or prev_labels)
-        info_label = "Visualizacoes da integracao em desenvolvimento."
-        selected_labels.discard(info_label)
-
-        if any(label in selected_labels for label in rollout_children):
-            selected_labels.add("Rollout")
-
-        if "Integracao" in selected_labels and "Rollout" in selected_labels:
-            if "Integracao" not in prev_labels:
-                selected_labels.discard("Rollout")
-                st.session_state.route = "integracao"
-            elif "Rollout" not in prev_labels:
-                selected_labels.discard("Integracao")
-                st.session_state.route = "rollout"
-        if "Integracao" not in selected_labels and "Rollout" not in selected_labels:
-            selected_labels.add("Integracao" if st.session_state.route == "integracao" else "Rollout")
-
-        if "Integracao" in selected_labels and "Rollout" in selected_labels:
-            selected_labels.discard("Rollout" if st.session_state.route == "integracao" else "Integracao")
-
-        st.session_state.route = "integracao" if "Integracao" in selected_labels else "rollout"
-
-        st.session_state.show_status = "Visualizacao por Status" in selected_labels
-        st.session_state.show_lead = "Analise por Site (lead time)" in selected_labels
-        st.session_state.show_fiel = "Tabela Fiel/Real" in selected_labels
-
-        st.session_state["__nav_tree_index__"] = sorted(
-            index_lookup[label]
-            for label in selected_labels
-            if label in index_lookup
-        )
-    else:
-        st.markdown(header_html, unsafe_allow_html=True)
-        route_choice = st.radio(
-            "",
-            ["Rollout", "Integracao"],
-            index=0 if st.session_state.route == "rollout" else 1,
-            key="nav_route_radio",
-        )
-        st.session_state.route = route_choice.lower()
-
-        if st.session_state.route == "rollout":
-            st.checkbox("Visualizacao por Status", key="show_status")
-            st.checkbox("Analise por Site (lead time)", key="show_lead")
-            st.checkbox("Tabela Fiel/Real", key="show_fiel")
-        else:
-            st.markdown(
-                "<div style='margin:10px 0; color:#9aa0a6; font-size:13px;'>Visualizacoes da integracao em desenvolvimento.</div>",
-                unsafe_allow_html=True,
-            )
-
-    st.markdown("---")
+    # --- Título seção ---
     st.markdown(
-        "<div style='text-align:center; color:#9aa0a6; font-size:12px;'>Centro de Automacao - Claro</div>",
+        "<div style='color:#9aa0a6;font-weight:600;font-size:13px;"
+        "margin:6px 0 8px;display:flex;align-items:center;'>Automações"
+        "<div style='flex:1;border-top:1px solid #3a3f44;margin-left:8px;'></div></div>",
         unsafe_allow_html=True,
     )
+
+    # --- Títulos (pill) ---
+    if HAS_SAC and sac is not None:
+        page = sac.menu(
+            items=[sac.MenuItem("Rollout", icon="bar-chart"),
+                   sac.MenuItem("Integração", icon="cloud")],
+            index=0 if st.session_state.route == "rollout" else 1,
+            return_index=False,
+            size="sm",
+            key="main_menu",
+        )
+        st.session_state.route = "rollout" if page == "Rollout" else "integracao"
+    else:
+        st.session_state.route = st.radio(
+            "", ["Rollout", "Integracao"],
+            index=0 if st.session_state.route == "rollout" else 1
+        ).lower()
+
+    # --- CSS: subtítulos colados no título, com “tronco” e linhas ---
+    st.markdown("""
+    <style>
+    [data-testid="stSidebar"] .ant-menu{ margin-bottom:6px !important; }
+    .zte-tree-wrap{  margin:2px 0 0 8px; padding-left:12px; border-left:1px solid #3a3f44; }
+    .zte-int-wrap{   margin:2px 0 0 8px; padding-left:12px; border-left:1px solid #3a3f44; }
+    .zte-tree-wrap .ant-tree-treenode{ padding:2px 0 !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # --- Subtítulos (checkbox + linhas), logo abaixo do título ativo ---
+    if st.session_state.route == "rollout":
+        st.markdown("<div class='zte-tree-wrap'>", unsafe_allow_html=True)
+
+        items = [
+            sac.TreeItem("Visualização por Status"),
+            sac.TreeItem("Análise por Site (lead time)"),
+            sac.TreeItem("Tabela Fiel/Real"),
+        ]
+        default_idx = []
+        if st.session_state.get("show_status", True): default_idx.append(0)
+        if st.session_state.get("show_lead", True):   default_idx.append(1)
+        if st.session_state.get("show_fiel", True):   default_idx.append(2)
+
+        selected = sac.tree(
+            items=items,
+            index=default_idx,
+            checkbox=True,
+            checkbox_strict=True,
+            open_all=True,
+            show_line=True,
+            return_index=False,
+            key="rollout_tree",
+        ) or []
+        sel = set(selected)
+        st.session_state.show_status = "Visualização por Status" in sel
+        st.session_state.show_lead   = "Análise por Site (lead time)" in sel
+        st.session_state.show_fiel   = "Tabela Fiel/Real" in sel
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    else:  # Integracao
+        st.markdown(
+            "<div class='zte-int-wrap' style='color:#9aa0a6;font-size:13px;'>"
+            "Visualizacoes da integracao em desenvolvimento."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    # --- Rodapé ---
+    st.markdown("---")
+    st.markdown(
+        "<div style='text-align:center;color:#9aa0a6;font-size:12px;'>Centro de Automação - Claro</div>",
+        unsafe_allow_html=True,
+    )
+
+
+
+
+
+
 @st.cache_data(show_spinner=False)
 def read_excel_no_header(path: Path) -> pd.DataFrame:
     # header=None preserva as 7 linhas do topo (KPIs na linha 6)

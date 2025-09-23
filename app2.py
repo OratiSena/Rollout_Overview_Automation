@@ -80,7 +80,7 @@ def page_integracao() -> None:
         """,
         unsafe_allow_html=True,
     )
-    st.caption("Fonte: Google Sheets (Integra\u00e7\u00e3o)")
+    st.caption("Fonte: Google Sheets (CONTROLE_CLARO_RAN_INTEGRAÇÃO)")
 
     with st.spinner("Carregando planilha online..."):
         df = _fetch_sheet()
