@@ -158,7 +158,8 @@ def page_integracao() -> None:
             "finished": "Finished",
             "Need Update": "Need Update",
             "Aguardando aprovação": "Waiting",
-            "Pendência": "Pending"
+            "Pendência": "Pending",
+            "Pendência KPI": "Pending"
         }
 
         status_counts["Status"] = status_counts["Status"].map(status_mapping).fillna(status_counts["Status"])
