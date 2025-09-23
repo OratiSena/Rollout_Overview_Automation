@@ -80,7 +80,7 @@ def page_integracao() -> None:
         """
         <h1 style='margin: 6px 0 12px 0; font-size: 36px;'>Integração</h1>
         <h3 style='margin: 0 0 24px 0; font-size: 18px; color: grey;'>
-        Análise detalhada dos sites integrados
+        Suba o Excel (.xlsb, .xlsx) e acompanhe KPIs e detalhamento por status
         </h3>
         """,
         unsafe_allow_html=True,
@@ -101,29 +101,36 @@ def page_integracao() -> None:
 
     st.success(f"Planilha carregada com {len(df):,} linhas.")
 
-    # Subtítulos na página principal
-    st.markdown(
-        """
-        <h2 style='margin: 12px 0; font-size: 24px;'>Tabela Fiel</h2>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        """
-        <h2 style='margin: 12px 0; font-size: 24px;'>Status de Integração</h2>
-        """,
-        unsafe_allow_html=True,
-    )
-
     # Filtros na página principal
-    st.markdown("### Filtros")
+    st.markdown(
+        """
+        <h2 style='margin: 12px 0; font-size: 24px;'>Filtros</h2>
+        """,
+        unsafe_allow_html=True,
+    )
     status_filter = st.multiselect(
         "Filtrar por Status 4G:", options=df["4G Status"].unique(), default=[]
     )
 
     if status_filter:
         df = df[df["4G Status"].isin(status_filter)]
+
+    # Tabela Fiel
+    st.markdown(
+        """
+        <h2 style='margin: 12px 0; font-size: 24px;'>Tabela Fiel</h2>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.dataframe(df.head(50), use_container_width=True)
+
+    # Status de Integração
+    st.markdown(
+        """
+        <h2 style='margin: 12px 0; font-size: 24px;'>Status de Integração</h2>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Resumo dos status
     status_summary = summarize_status(df)
@@ -140,4 +147,5 @@ def page_integracao() -> None:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    st.dataframe(df.head(50), use_container_width=True)
+    # Tabela de resumo
+    st.dataframe(status_summary, use_container_width=True)
