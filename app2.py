@@ -153,5 +153,68 @@ def page_integracao() -> None:
             for col in integration_columns if col in df.columns
         ])
 
-        # Filter and map statuses to the first set
-        status_counts = status_counts[status_counts['Status'].isin(["Finished", "Need update", "Waiting", "Pending"])]
+        # Map statuses to the first set
+        status_mapping = {
+            "finished": "Finished",
+            "Need Update": "Need Update",
+            "Aguardando aprovação": "Waiting",
+            "Pendência": "Pending"
+        }
+
+        status_counts["Status"] = status_counts["Status"].map(status_mapping).fillna(status_counts["Status"])
+
+        fig = px.bar(
+            status_counts,
+            x="Type",
+            y="Count",
+            color="Status",
+            text="Count",
+            title="Resumo do Status por Categoria",
+            labels={"Type": "Categoria", "Count": "Quantidade", "Status": "Status"},
+            color_discrete_map={
+                "Finished": "#2ecc71",  # Verde vibrante
+                "Need Update": "#3498db",  # Azul vibrante
+                "Waiting": "#f1c40f",  # Amarelo vibrante
+                "Pending": "#e74c3c"   # Vermelho vibrante
+            }
+        )
+        fig.update_traces(textposition="outside")
+        st.plotly_chart(fig, use_container_width=True)
+
+    elif graph_option == "General Status":
+        # Gráfico de General Status
+        general_status_counts = df["General Status"].value_counts().rename_axis("Status").reset_index(name="Count")
+
+        fig = px.bar(
+            general_status_counts,
+            x="Status",
+            y="Count",
+            text="Count",
+            title="Resumo do General Status",
+            labels={"Status": "Status", "Count": "Quantidade"},
+            color="Status",
+            color_discrete_map={
+                "Finished": "#28a745",  # Verde vibrante
+                "On going": "#007bff",  # Azul vibrante
+                "Waiting": "#ffc107"  # Amarelo vibrante
+            }
+        )
+        fig.update_traces(textposition="outside")
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Tabela de resumo
+    status_summary = df[["Site Name", "Integration date", "MOS", "General Status", "4G Status", "2G Status"]]
+    st.dataframe(status_summary, use_container_width=True)
+
+    # Tabela Fiel
+    st.markdown(
+        """
+        <h2 style='margin: 12px 0; font-size: 24px;'>Tabela Fiel</h2>
+        """,
+        unsafe_allow_html=True,
+    )
+    with st.expander("Tabela Fiel", expanded=False):
+        st.dataframe(
+            df.style.set_properties(subset=["Comment"], **{"width": "300px"}),
+            use_container_width=True
+        )
