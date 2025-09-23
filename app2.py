@@ -129,30 +129,59 @@ def page_integracao() -> None:
         unsafe_allow_html=True,
     )
 
-    # Gráfico de status
-    status_counts = pd.concat([
-        df["4G Status"].value_counts().rename_axis("Status").reset_index(name="Count").assign(Type="4G"),
-        df["2G Status"].value_counts().rename_axis("Status").reset_index(name="Count").assign(Type="2G")
-    ])
-
-    fig = px.bar(
-        status_counts,
-        x="Type",
-        y="Count",
-        color="Status",
-        text="Count",
-        title="Resumo do Status por Tecnologia",
-        labels={"Type": "Tecnologia", "Count": "Quantidade", "Status": "Status"},
-        color_discrete_map={
-            "Finished": "#a8d5a2",  # Verde pastel
-            "Pending": "#f4a8a8",  # Vermelho pastel
-            "Need update": "#a8c5f4",  # Azul pastel
-            "Waiting": "#f4d5a8",  # Laranja pastel
-            "N/A": "#d5d5d5"  # Cinza pastel
-        }
+    # Alternar entre gráficos
+    graph_option = st.radio(
+        "Escolha o gráfico:",
+        options=["Status por Tecnologia", "General Status"],
+        index=0
     )
-    fig.update_traces(textposition="outside")
-    st.plotly_chart(fig, use_container_width=True)
+
+    if graph_option == "Status por Tecnologia":
+        # Gráfico de Status por Tecnologia
+        status_counts = pd.concat([
+            df["4G Status"].value_counts().rename_axis("Status").reset_index(name="Count").assign(Type="4G"),
+            df["2G Status"].value_counts().rename_axis("Status").reset_index(name="Count").assign(Type="2G")
+        ])
+
+        fig = px.bar(
+            status_counts,
+            x="Type",
+            y="Count",
+            color="Status",
+            text="Count",
+            title="Resumo do Status por Tecnologia",
+            labels={"Type": "Tecnologia", "Count": "Quantidade", "Status": "Status"},
+            color_discrete_map={
+                "Finished": "#28a745",  # Verde vibrante
+                "Pending": "#dc3545",  # Vermelho vibrante
+                "Need update": "#007bff",  # Azul vibrante
+                "Waiting": "#ffc107",  # Amarelo vibrante
+                "N/A": "#6c757d"  # Cinza vibrante
+            }
+        )
+        fig.update_traces(textposition="outside")
+        st.plotly_chart(fig, use_container_width=True)
+
+    elif graph_option == "General Status":
+        # Gráfico de General Status
+        general_status_counts = df["General Status"].value_counts().rename_axis("Status").reset_index(name="Count")
+
+        fig = px.bar(
+            general_status_counts,
+            x="Status",
+            y="Count",
+            text="Count",
+            title="Resumo do General Status",
+            labels={"Status": "Status", "Count": "Quantidade"},
+            color="Status",
+            color_discrete_map={
+                "Finished": "#28a745",  # Verde vibrante
+                "On going": "#007bff",  # Azul vibrante
+                "Waiting": "#ffc107"  # Amarelo vibrante
+            }
+        )
+        fig.update_traces(textposition="outside")
+        st.plotly_chart(fig, use_container_width=True)
 
     # Tabela de resumo
     status_summary = df[["Site Name", "Integration date", "MOS", "General Status", "4G Status", "2G Status"]]
