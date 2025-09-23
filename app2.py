@@ -163,10 +163,9 @@ def page_integracao() -> None:
             labels={"Type": "Categoria", "Count": "Quantidade", "Status": "Status"},
             color_discrete_map={
                 "Finished": "#2ecc71",  # Verde vibrante
-                "Pending": "#e74c3c",  # Vermelho vibrante
                 "Need update": "#3498db",  # Azul vibrante
                 "Waiting": "#f1c40f",  # Amarelo vibrante
-                "N/A": "#95a5a6"  # Cinza vibrante
+                "Pending": "#e74c3c"   # Vermelho vibrante
             }
         )
         fig.update_traces(textposition="outside")
