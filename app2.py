@@ -106,7 +106,12 @@ def page_integracao() -> None:
             df[col] = df[col].dt.date
 
     # Adjusting the graph colors and x-axis label
-    st.success(f"Planilha carregada com {len(df):,} linhas.")
+    # Filter out rows with empty 'Site Name'
+    df = df[df["Site Name"].notna()]
+
+    # Update the message to count sites instead of rows
+    site_count = df["Site Name"].nunique() if "Site Name" in df.columns else 0
+    st.success(f"Planilha carregada com {site_count:,} sites identificados.")
 
     # Filtros na página principal
     st.markdown(
