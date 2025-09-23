@@ -10,6 +10,8 @@ from typing import Optional
 import pandas as pd
 import requests
 import streamlit as st
+import plotly.express as px
+from core.etl_integracao import process_integration_data, summarize_status
 
 
 SHEET_URL_ENV = "INTEGRACAO_SHEET_URL"
@@ -76,7 +78,10 @@ def page_integracao() -> None:
     """Renderiza a pagina principal da automacao de Integracao."""
     st.markdown(
         """
-        <h2 style='margin: 6px 0 12px 0; font-size: 28px;'>Integra\u00e7\u00e3o</h2>
+        <h1 style='margin: 6px 0 12px 0; font-size: 36px;'>Integração</h1>
+        <h3 style='margin: 0 0 24px 0; font-size: 18px; color: grey;'>
+        Análise detalhada dos sites integrados
+        </h3>
         """,
         unsafe_allow_html=True,
     )
@@ -88,5 +93,43 @@ def page_integracao() -> None:
     if df is None:
         st.stop()
 
+    try:
+        df = process_integration_data(df)
+    except ValueError as e:
+        st.error(f"Erro ao processar os dados: {e}")
+        st.stop()
+
     st.success(f"Planilha carregada com {len(df):,} linhas.")
+
+    # Sidebar - Tabela Fiel
+    with st.sidebar.expander("Tabela Fiel", expanded=False):
+        st.dataframe(df, use_container_width=True)
+
+    # Sidebar - Status de Integração
+    st.sidebar.subheader("Status de Integração")
+
+    # Resumo dos status
+    status_summary = summarize_status(df)
+
+    # Gráfico de status
+    fig = px.bar(
+        status_summary,
+        x="Status",
+        y="Count",
+        title="Resumo do Status 4G",
+        labels={"Count": "Quantidade", "Status": "Status"},
+        color="Status",
+        color_discrete_map={"Active": "green", "Inactive": "blue", "Unknown": "grey"},
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Filtros
+    st.sidebar.markdown("### Filtros")
+    status_filter = st.sidebar.multiselect(
+        "Filtrar por Status 4G:", options=df["4G Status"].unique(), default=[]
+    )
+
+    if status_filter:
+        df = df[df["4G Status"].isin(status_filter)]
+
     st.dataframe(df.head(50), use_container_width=True)
