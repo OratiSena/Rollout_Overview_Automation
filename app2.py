@@ -101,9 +101,29 @@ def page_integracao() -> None:
 
     st.success(f"Planilha carregada com {len(df):,} linhas.")
 
-    # Sidebar - Subtítulos
-    st.sidebar.subheader("Tabela Fiel")
-    st.sidebar.subheader("Status de Integração")
+    # Subtítulos na página principal
+    st.markdown(
+        """
+        <h2 style='margin: 12px 0; font-size: 24px;'>Tabela Fiel</h2>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <h2 style='margin: 12px 0; font-size: 24px;'>Status de Integração</h2>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Filtros na página principal
+    st.markdown("### Filtros")
+    status_filter = st.multiselect(
+        "Filtrar por Status 4G:", options=df["4G Status"].unique(), default=[]
+    )
+
+    if status_filter:
+        df = df[df["4G Status"].isin(status_filter)]
 
     # Resumo dos status
     status_summary = summarize_status(df)
@@ -119,14 +139,5 @@ def page_integracao() -> None:
         color_discrete_map={"Active": "green", "Inactive": "blue", "Unknown": "grey"},
     )
     st.plotly_chart(fig, use_container_width=True)
-
-    # Filtros
-    st.sidebar.markdown("### Filtros")
-    status_filter = st.sidebar.multiselect(
-        "Filtrar por Status 4G:", options=df["4G Status"].unique(), default=[]
-    )
-
-    if status_filter:
-        df = df[df["4G Status"].isin(status_filter)]
 
     st.dataframe(df.head(50), use_container_width=True)
