@@ -99,6 +99,9 @@ def page_integracao() -> None:
         st.error(f"Erro ao processar os dados: {e}")
         st.stop()
 
+    # Remover números das datas
+    df["Integration date"] = df["Integration date"].dt.date
+
     st.success(f"Planilha carregada com {len(df):,} linhas.")
 
     # Filtros na página principal
@@ -123,10 +126,6 @@ def page_integracao() -> None:
         unsafe_allow_html=True,
     )
 
-    # Resumo dos status
-    status_summary = df[["Integration date", "MOS", "General Status", "4G Status", "2G Status"]]
-    st.dataframe(status_summary, use_container_width=True)
-
     # Gráfico de status
     fig = px.bar(
         summarize_status(df),
@@ -138,6 +137,10 @@ def page_integracao() -> None:
         color_discrete_map={"Active": "green", "Inactive": "blue", "Unknown": "grey"},
     )
     st.plotly_chart(fig, use_container_width=True)
+
+    # Tabela de resumo
+    status_summary = df[["Site Name", "Integration date", "MOS", "General Status", "4G Status", "2G Status"]]
+    st.dataframe(status_summary, use_container_width=True)
 
     # Tabela Fiel
     st.markdown(
