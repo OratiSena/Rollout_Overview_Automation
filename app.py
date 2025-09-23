@@ -407,9 +407,9 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
     is_mobile = _is_mobile_viewport()
 
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    st.markdown("<h2 style='margin: 6px 0 12px 0; font-size: 24px;'>Analise por Site (lead time)</h2>", unsafe_allow_html=True)
-    with st.expander("Abrir analise por site", expanded=False):
-        options = ["Analise pelos filtros aplicados", "Media (todos os sites)", "Pesquisar Site especifico"]
+    st.markdown("<h2 style='margin: 6px 0 12px 0; font-size: 24px;'>Análise por Site (lead time)</h2>", unsafe_allow_html=True)
+    with st.expander("Abrir análise por site", expanded=False):
+        options = ["Análise pelos filtros aplicados", "Média (todos os sites)", "Pesquisar Site específico"]
         current = st.session_state.get("site_analysis_mode")
         if current not in options:
             st.session_state["site_analysis_mode"] = options[0]
@@ -687,7 +687,7 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
 
     # ---- Opcoes da tabela ----
     st.markdown("<h3 style='margin: 18px 0 6px;'>Tabela Fiel</h3>", unsafe_allow_html=True)
-    with st.expander("Opcoes da tabela", expanded=False):
+    with st.expander("Opções da tabela", expanded=False):
         l4_all = [x for x in list(dict.fromkeys(df_all.columns.get_level_values(0))) if _norm(x)]
         show_blks = st.multiselect(
             "Blocos (linha 4 do Excel)", options=l4_all, default=l4_all,
@@ -949,7 +949,7 @@ def page_rollout():
     # Titulo grande para a secao
     st.markdown(
         """
-        <h2 style='margin: 6px 0 12px 0; font-size: 28px;'>Visualizacao por Status</h2>
+        <h2 style='margin: 6px 0 12px 0; font-size: 28px;'>Visualização por Status</h2>
         """,
         unsafe_allow_html=True,
     )
@@ -983,7 +983,7 @@ def page_rollout():
     # ========== 4) Tipo de grafico e Escopo ==========
     col_viz, col_sit, col_reset = st.columns([1, 1, 0.25])
     viz_type = col_viz.radio(
-        "Visualizacao",
+        "Visualização",
         ["Barras", "Pizza"],
         horizontal=True,
         index=0 if st.session_state.get("viz_type", "Barras") == "Barras" else 1,
@@ -995,7 +995,7 @@ def page_rollout():
     default_sit = st.session_state.get("escopo", "Ambos")
     if default_sit not in sit_opts:
         default_sit = "Concluidos" if viz_type == "Pizza" else "Ambos"
-    Situacao = col_sit.radio("Situacao", sit_opts, horizontal=True, index=sit_opts.index(default_sit), key="sit_radio")
+    Situacao = col_sit.radio("Situação", sit_opts, horizontal=True, index=sit_opts.index(default_sit), key="sit_radio")
     st.session_state["escopo"] = Situacao
 
     if col_reset.button("Resetar", use_container_width=True, key="btn_reset_all"):
