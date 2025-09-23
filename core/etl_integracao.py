@@ -10,15 +10,19 @@ def process_integration_data(df: pd.DataFrame) -> pd.DataFrame:
         df (pd.DataFrame): DataFrame original com os dados de integração.
 
     Returns:
-        pd.DataFrame: DataFrame processado com colunas relevantes e status calculados.
+        pd.DataFrame: DataFrame processado com todas as colunas relevantes.
     """
     # Garantir que as colunas necessárias existam
     required_columns = [
-        "Site Name", "Integration date", "MOS", "General Status", "4G Status", "2G Status"
+        "Site Name", "Integration date", "MOS", "General Status", "Comment", "4G Status", "2G Status",
+        "Alarm test", "Calling test", "IR", "SSV", "ARQ Number", "OT 4G", "OT 2G", "Pre-comissioned",
+        "Region", "Related BSC", "BSC ID", "BSC SCTP", "MEIO TX", "MEID", "2G BTS ID", "LTE eNodeB ID",
+        "OAM IP", "OAM IP netmask", "OAM Gateway", "VLAN", "GSM IP", "GSM IP netmask", "GSM IP Gateway",
+        "LTE IP", "LTE IP netmask", "LTE IP Gateway"
     ]
-    for col in required_columns:
-        if col not in df.columns:
-            raise ValueError(f"Coluna obrigatória ausente: {col}")
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        raise ValueError(f"Colunas obrigatórias ausentes: {', '.join(missing_columns)}")
 
     # Filtrar colunas relevantes
     df = df[required_columns]
