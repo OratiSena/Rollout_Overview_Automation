@@ -137,10 +137,14 @@ def page_integracao() -> None:
     )
 
     if graph_option == "Status por Tecnologia":
-        # Gráfico de Status por Tecnologia
+        # Gráfico de Status por Tecnologia com 9 colunas específicas
+        integration_columns = [
+            "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 4G", "OT 2G"
+        ]
+
         status_counts = pd.concat([
-            df["4G Status"].value_counts().rename_axis("Status").reset_index(name="Count").assign(Type="4G"),
-            df["2G Status"].value_counts().rename_axis("Status").reset_index(name="Count").assign(Type="2G")
+            df[col].value_counts().rename_axis("Status").reset_index(name="Count").assign(Type=col)
+            for col in integration_columns if col in df.columns
         ])
 
         fig = px.bar(
