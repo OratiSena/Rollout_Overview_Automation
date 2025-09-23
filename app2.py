@@ -105,6 +105,7 @@ def page_integracao() -> None:
         if col in df.columns:
             df[col] = df[col].dt.date
 
+    # Adjusting the graph colors and x-axis label
     st.success(f"Planilha carregada com {len(df):,} linhas.")
 
     # Filtros na página principal
@@ -153,14 +154,14 @@ def page_integracao() -> None:
             y="Count",
             color="Status",
             text="Count",
-            title="Resumo do Status por Tecnologia",
-            labels={"Type": "Tecnologia", "Count": "Quantidade", "Status": "Status"},
+            title="Resumo do Status por Categoria",
+            labels={"Type": "Categoria", "Count": "Quantidade", "Status": "Status"},
             color_discrete_map={
-                "Finished": "#28a745",  # Verde vibrante
-                "Pending": "#dc3545",  # Vermelho vibrante
-                "Need update": "#007bff",  # Azul vibrante
-                "Waiting": "#ffc107",  # Amarelo vibrante
-                "N/A": "#6c757d"  # Cinza vibrante
+                "Finished": "#2ecc71",  # Verde vibrante
+                "Pending": "#e74c3c",  # Vermelho vibrante
+                "Need update": "#3498db",  # Azul vibrante
+                "Waiting": "#f1c40f",  # Amarelo vibrante
+                "N/A": "#95a5a6"  # Cinza vibrante
             }
         )
         fig.update_traces(textposition="outside")
