@@ -146,10 +146,6 @@ def page_integracao() -> None:
     st.dataframe(status_summary, use_container_width=True)
 
     # Tabela Fiel
-    st.markdown(
-        """
-        <h2 style='margin: 12px 0; font-size: 24px;'>Tabela Fiel</h2>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.dataframe(df, use_container_width=True)
+    st.sidebar.markdown("### Tabela Fiel")
+    with st.sidebar.expander("Tabela Fiel", expanded=False):
+        st.dataframe(df, use_container_width=True)
