@@ -130,15 +130,28 @@ def page_integracao() -> None:
     )
 
     # Gráfico de status
+    status_counts = pd.concat([
+        df["4G Status"].value_counts().rename_axis("Status").reset_index(name="Count").assign(Type="4G"),
+        df["2G Status"].value_counts().rename_axis("Status").reset_index(name="Count").assign(Type="2G")
+    ])
+
     fig = px.bar(
-        summarize_status(df),
-        x="Status",
+        status_counts,
+        x="Type",
         y="Count",
-        title="Resumo do Status 4G",
-        labels={"Count": "Quantidade", "Status": "Status"},
         color="Status",
-        color_discrete_map={"Active": "green", "Inactive": "blue", "Unknown": "grey"},
+        text="Count",
+        title="Resumo do Status por Tecnologia",
+        labels={"Type": "Tecnologia", "Count": "Quantidade", "Status": "Status"},
+        color_discrete_map={
+            "Finished": "#a8d5a2",  # Verde pastel
+            "Pending": "#f4a8a8",  # Vermelho pastel
+            "Need update": "#a8c5f4",  # Azul pastel
+            "Waiting": "#f4d5a8",  # Laranja pastel
+            "N/A": "#d5d5d5"  # Cinza pastel
+        }
     )
+    fig.update_traces(textposition="outside")
     st.plotly_chart(fig, use_container_width=True)
 
     # Tabela de resumo
@@ -153,4 +166,7 @@ def page_integracao() -> None:
         unsafe_allow_html=True,
     )
     with st.expander("Tabela Fiel", expanded=False):
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(
+            df.style.set_properties(subset=["Comment"], **{"width": "300px"}),
+            use_container_width=True
+        )
