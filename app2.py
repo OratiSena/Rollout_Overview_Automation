@@ -101,11 +101,8 @@ def page_integracao() -> None:
 
     st.success(f"Planilha carregada com {len(df):,} linhas.")
 
-    # Sidebar - Tabela Fiel
-    with st.sidebar.expander("Tabela Fiel", expanded=False):
-        st.dataframe(df, use_container_width=True)
-
-    # Sidebar - Status de Integração
+    # Sidebar - Subtítulos
+    st.sidebar.subheader("Tabela Fiel")
     st.sidebar.subheader("Status de Integração")
 
     # Resumo dos status
