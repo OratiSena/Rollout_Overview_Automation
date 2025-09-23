@@ -571,6 +571,21 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
         return fallback  # coluna E
 
 
+    def _to_date_safe(series: pd.Series) -> pd.Series:
+        s = pd.Series(series)  # garante Series
+        # 1) tenta parse “normal” (YYYY-MM-DD, etc.)
+        d = pd.to_datetime(s, errors="coerce")
+        # 2) no que ficou NaT, tenta serial Excel (dias desde 1899-12-30)
+        mask = d.isna()
+        num = pd.to_numeric(s[mask], errors="coerce")
+        # faixa plausível de seriais Excel (1 .. 2958465 ~= 9999-12-31)
+        ok = num.notna() & np.isfinite(num) & (num > 0) & (num <= 2_958_465)
+        if ok.any():
+            with np.errstate(all="ignore"):
+                d.loc[num[ok].index] = pd.to_datetime(num[ok], unit="D", origin="1899-12-30", errors="coerce")
+        return d
+
+
     # ---- Aplica filtros por SITE ----
     # ---- Alinha as LINHAS com a mesma selecao da tabela "Visualizacao por Status" ----
     site_idx = _get_site_col_idx_from_raw(df_raw)
@@ -730,17 +745,10 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
 
     for col in df_sel.columns:
         if _looks_date_col(col):
-            ser_plain = pd.to_datetime(df_sel[col], errors="coerce")
-            num_vals = pd.to_numeric(df_sel[col], errors="coerce")
-            mask_numeric = num_vals.notna()
-            mask_reasonable = mask_numeric & num_vals.between(-50000, 600000)
-            if mask_reasonable.any():
-                safe_vals = num_vals.where(mask_reasonable)
-                with np.errstate(all="ignore"):
-                    ser_excel = pd.to_datetime(safe_vals, unit="D", origin="1899-12-30", errors="coerce")
-                ser_plain = ser_plain.where(~mask_reasonable, ser_excel)
-            if ser_plain.notna().sum() > 0:
-                df_sel[col] = ser_plain.dt.strftime("%d-%b-%y").where(ser_plain.notna(), df_sel[col])
+            ser = _to_date_safe(df_sel[col])
+            if ser.notna().any():
+                df_sel[col] = ser.dt.strftime("%d-%b-%y").where(ser.notna(), df_sel[col])
+
 
     # ---- COMPACTACAO para 2 niveis de exibicao ----
     lvl0, lvl1 = [], []
