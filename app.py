@@ -251,8 +251,9 @@ with st.sidebar:
         st.markdown("<div class='zte-tree-wrap'>", unsafe_allow_html=True)
 
         items = [
+            sac.TreeItem("Filtros", disabled=True),
             sac.TreeItem("Visualização por Status"),
-            sac.TreeItem("Análise por Site (lead time)"),
+            sac.TreeItem("Lead Time"),
             sac.TreeItem("Tabela Fiel/Real"),
         ]
         default_idx = []
@@ -414,12 +415,37 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
         if current not in options:
             st.session_state["site_analysis_mode"] = options[0]
         mode = st.radio("Modo", options, horizontal=True, key="site_analysis_mode")
-
+        
+        # 1. Carregar dados de tempo parado por status
         stay = etl.stage_stay_days(df_raw).copy()
+        
+        # 2. Normalizar a coluna SITE para string para evitar problemas de tipo
         stay["SITE"] = stay["SITE"].astype(str)
+        
+        # 3. Obter a ordem das fases para exibição
         phase_order = [s for (_f, s, _c) in phase_map]
+        
+        # 4. Extrair os sites filtrados do DataFrame que já vem filtrado (sites_f)
         filtered_sites = set(sites_f["SITE"].astype(str)) if not sites_f.empty else set()
-        stay_filtered = stay[stay["SITE"].isin(filtered_sites)] if filtered_sites else stay.iloc[0:0]
+        
+        # 5. Criar um DataFrame filtrado APENAS com os sites presentes em filtered_sites
+        if filtered_sites:
+            # Usar isin com astype(str) para garantir correspondência correta
+            stay_filtered = stay[stay["SITE"].astype(str).isin(filtered_sites)].copy()
+            
+            # Validação para garantir que temos todos os sites esperados
+            sites_encontrados = set(stay_filtered["SITE"].astype(str))
+            sites_ausentes = filtered_sites - sites_encontrados
+            
+            # Mostrar aviso se alguns sites não foram encontrados
+            if sites_ausentes:
+                print(f"Aviso: {len(sites_ausentes)} sites filtrados não encontrados na tabela lead time")
+            
+            # Informações de debug
+            print(f"Análise lead time: {len(filtered_sites)} sites filtrados, {len(stay_filtered)} encontrados")
+        else:
+            # Se não há sites filtrados, usar DataFrame vazio
+            stay_filtered = stay.iloc[0:0].copy()
 
         def _build_mean_df(df_source: pd.DataFrame) -> pd.DataFrame:
             rows = []
@@ -465,46 +491,82 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
             return dark(fig)
 
         if mode == "Analise pelos filtros aplicados":
+            # Verificar se há sites filtrados disponíveis para análise
             if stay_filtered.empty:
                 st.info("Nenhum site restante com os filtros atuais.")
             else:
+                # Calcular a média de tempo por status usando apenas os sites filtrados
                 avg_df = _build_mean_df(stay_filtered)
+                
+                # Garantir que o título mostre o número correto de sites (dos filtros aplicados)
+                # Usar len(sites_f) para garantir consistência com a tabela principal
+                num_sites_filtrados = sites_f.shape[0]
+                
+                # Construir o gráfico com o número correto de sites no título
                 fig = _build_bar(
                     avg_df,
-                    title=f"Tempo medio parado por status (dias) | {len(stay_filtered)} site(s)",
+                    title=f"Tempo medio parado por status (dias) | {num_sites_filtrados} site(s)",
                 )
                 st.plotly_chart(fig, use_container_width=True, key="lead_filtered_chart")
         elif mode == "Media (todos os sites)":
+            # Para a média de todos os sites, usamos o DataFrame original
             avg_df = _build_mean_df(stay)
+            
+            # Usar o total de sites únicos para o título
+            total_sites = stay["SITE"].nunique()
+            
+            # Construir o gráfico com o total de sites
             fig = _build_bar(
                 avg_df,
-                title=f"Tempo medio parado por status (dias) | {len(stay)} site(s)",
+                title=f"Tempo medio parado por status (dias) | {total_sites} site(s)",
             )
             st.plotly_chart(fig, use_container_width=True, key="lead_avg_chart")
         else:
+            # Opção de pesquisar site específico
+            # Obter lista de todos os sites disponíveis
             uniq_all = sorted(stay["SITE"].dropna().astype(str).unique().tolist())
+            
+            # Se houver filtros aplicados, mostrar esses sites por padrão
             default_pool = sorted(filtered_sites) if filtered_sites else uniq_all
+            
+            # Campo de pesquisa
             q_site = st.text_input("Pesquisar SITE", placeholder="Digite parte do SITE...")
+            
+            # Filtrar sites com base na pesquisa
             if q_site:
                 matches = [s for s in uniq_all if q_site.strip().lower() in s.lower()]
             else:
                 matches = default_pool
+            # Mostrar selectbox apenas se houver sites correspondentes
             site_sel = st.selectbox("Selecionar SITE", matches, index=0) if matches else None
+            
+            # Mensagens de informação se não houver sites para mostrar
             if not matches:
                 if q_site:
                     st.info("Nenhum SITE encontrado para a pesquisa.")
                 elif not filtered_sites:
-                    st.info("Nenhum SITE filtrado disponivel no momento.")
+                    st.info("Nenhum SITE filtrado disponível no momento.")
+            
+            # Mostrar dados do site selecionado
             if site_sel:
+                # Obter a linha correspondente ao site selecionado
                 row = stay[stay["SITE"].astype(str) == str(site_sel)].head(1)
-                data = []
-                total = 0.0
-                for s in phase_order:
-                    col = f"stay_{s}"
-                    if col in row.columns:
-                        val = float(pd.to_numeric(row[col], errors="coerce").fillna(0).iloc[0])
-                        data.append({"fase_curta": s, "dias": val})
-                        total += max(val, 0.0)
+                
+                if row.empty:
+                    st.error(f"Site {site_sel} não encontrado nos dados de lead time")
+                else:
+                    # Preparar os dados para o gráfico
+                    data = []
+                    total = 0.0
+                    
+                    # Calcular o tempo para cada status
+                    for s in phase_order:
+                        col = f"stay_{s}"
+                        if col in row.columns:
+                            # Converter para número e pegar o valor
+                            val = float(pd.to_numeric(row[col], errors="coerce").fillna(0).iloc[0])
+                            data.append({"fase_curta": s, "dias": val})
+                            total += max(val, 0.0)
                 site_df = pd.DataFrame(data)
                 st.caption(f"Total decorrido (soma dos status) para {site_sel}: {int(total)} dias")
                 fig = _build_bar(
@@ -825,6 +887,18 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
 
 
 def page_rollout():
+    # Verificação de colunas antes do merge
+    merge_vars = []
+    if 'snap' in locals():
+        merge_vars.append(("snap", snap))
+    if 'static' in locals():
+        merge_vars.append(("static", static))
+    if 'delay_df' in locals():
+        merge_vars.append(("delay_df", delay_df))
+    for df_name, df_obj in merge_vars:
+        if "SITE" not in df_obj.columns:
+            st.error(f"O dataframe '{df_name}' não possui a coluna 'SITE'.\nColunas encontradas: {list(df_obj.columns)}\nVerifique o arquivo enviado e o processamento dos dados.")
+            st.stop()
     # Aplica reset pendente ANTES de criar widgets (evita conflito de keys)
     if st.session_state.get("__do_reset__", False):
         for _k in (
@@ -846,131 +920,148 @@ def page_rollout():
     uploaded = st.file_uploader(
         "Upload do arquivo Excel (.xlsb, .xlsx)",
         type=["xlsb", "xlsx", "xlsm"],
-        accept_multiple_files=False,
+        key="rollout_file_uploader"
     )
+    file_info = None
+    file_path = None
+    meta = None
+    # 1. Upload: salva arquivo e mostra info
     if uploaded is not None:
-        ext = (Path(uploaded.name).suffix or "").lower()
-        if ext not in {".xlsb", ".xlsx", ".xlsm"}:
-            st.error(f"Extensao nao suportada: {ext}")
-        else:
-            safe_name = Path(uploaded.name).name
-            saved_path = DATA_DIR / safe_name
-            _cleanup_saved_excels()
-            with open(saved_path, "wb") as f:
-                f.write(uploaded.getbuffer())
-            _save_meta(saved_path, uploaded.name)
-            if uploaded.name == saved_path.name:
-                st.success(f"Arquivo salvo: {saved_path.name}")
-            else:
-                st.success(f"Arquivo salvo: {uploaded.name} ? {saved_path.name}")
-            try:
-                ts = _now_local().strftime("%d/%m/%Y %H:%M")
-                st.caption(f"Enviado agora ({ts})")
-            except Exception:
-                pass
-
-    meta = _load_saved_meta()
-    # Mostrar info do arquivo salvo (se existir), mesmo sem upload novo
-    shown_info = False
-    if meta and Path(meta.get("saved_path", "")).exists():
-        sp = Path(meta["saved_path"]).name
-        on = meta.get("original_name", sp)
-        dt_raw = meta.get("uploaded_at", "")
-        dt_disp = _format_timestamp_display(dt_raw)
-        if on == sp:
-            st.caption(f"Arquivo atual: {on}  enviado em {dt_disp}")
-        else:
-            st.caption(f"Arquivo atual: {on} (salvo como {sp})  enviado em {dt_disp}")
-        shown_info = True
+        file_bytes = uploaded.read()
+        file_path = DATA_DIR / uploaded.name
+        with open(file_path, "wb") as f:
+            f.write(file_bytes)
+        st.session_state["rollout_file_path"] = str(file_path)
+        _save_meta(file_path, uploaded.name)
+        meta = _load_saved_meta()
+        dt_disp = _format_timestamp_display(meta.get("uploaded_at")) if meta else ""
+        file_info = f"Arquivo atual: {uploaded.name} enviado em {dt_disp}" if dt_disp else f"Arquivo atual: {uploaded.name}"
+        st.markdown(f"<div style='margin-top:8px;font-size:15px;'> {file_info} </div>", unsafe_allow_html=True)
     else:
-        # Fallback: procurar qualquer Excel salvo no diretorio de dados
-        cands = []
-        for pat in ("*.xlsb", "*.xlsx", "*.xlsm"):
-            cands.extend(DATA_DIR.glob(pat))
-        if cands:
-            cand = sorted(cands, key=lambda p: p.stat().st_mtime)[-1]
-            try:
-                dt_file = datetime.fromtimestamp(cand.stat().st_mtime, tz=_LOCAL_TZ) if _LOCAL_TZ else datetime.fromtimestamp(cand.stat().st_mtime)
-                ts = _format_timestamp_display(dt_file.isoformat())
-            except Exception:
-                ts = ""
-            st.caption(f"Arquivo atual: {cand.name}  salvo em {ts}")
-            shown_info = True
-
-    if st.button("Carregar planilha", key="btn_load"):
-        target_path = None
+        # 2. Se já existe arquivo salvo, mostra info
+        meta = _load_saved_meta()
         if meta and Path(meta.get("saved_path", "")).exists():
-            target_path = Path(meta["saved_path"])    
-        elif SAVED_FILE.exists():  # fallback legado .xlsb
-            target_path = SAVED_FILE
+            file_path = Path(meta["saved_path"])
+            dt_disp = _format_timestamp_display(meta.get("uploaded_at"))
+            file_info = f"Arquivo atual: {meta.get('original_name', file_path.name)} enviado em {dt_disp}"
+            st.markdown(f"<div style='margin-top:8px;font-size:15px;'> {file_info} </div>", unsafe_allow_html=True)
         else:
-            cands = []
-            for pat in ("*.xlsb", "*.xlsx", "*.xlsm"):
-                cands.extend(DATA_DIR.glob(pat))
-            if cands:
-                target_path = sorted(cands, key=lambda p: p.stat().st_mtime)[-1]
-        if not target_path:
-            st.error("Nenhum arquivo salvo. Faca o upload primeiro.")
-            st.stop()
-        with st.spinner("Lendo e tratando..."):
-            df_raw = read_excel_no_header(target_path)
-            df_clean, df_header = clean_rollout_dataframe(df_raw)
-        st.session_state.rollout_df_raw = df_raw
-        st.session_state.rollout_df_clean = df_clean
-        st.session_state.rollout_df_header = df_header
+            st.warning("Por favor, faça upload de um arquivo Excel para continuar.")
+            return
+
+    # 3. Botão 'Carregar planilha' só aparece se houver arquivo
+    if file_path is not None and Path(file_path).exists():
+        if st.button("Carregar planilha", key="btn_load_sheet"):
+            st.session_state["planilha_carregada"] = True
+            st.success("Planilha carregada!")
+        elif st.session_state.get("planilha_carregada"):
+            st.success("Planilha carregada!")
+        else:
+            st.info("Clique em 'Carregar planilha' para processar o arquivo.")
+    else:
+        st.warning("Por favor, faça upload de um arquivo Excel para continuar.")
+        return
+
+    # 4. Só processa a planilha se o botão foi clicado
+    if not st.session_state.get("planilha_carregada"):
+        return
+
+    # 5. Carregue os dados aqui (ajuste conforme seu ETL real)
+    try:
+        df_raw = pd.read_excel(file_path)
+    except Exception:
+        st.error("Erro ao carregar o arquivo salvo. Certifique-se de que é um Excel válido.")
+        return
+    # Limpeza/ETL (ajuste conforme seu pipeline)
+    df_clean = df_raw.copy()
+    try:
+        phase_map = get_explicit_phase_map(df_raw)
+    except Exception:
+        phase_map = []
+    full2short = {f: s for (f, s, _c) in phase_map} if phase_map else {}
+    phase_list_full = [full for (full, _s, _c) in phase_map]
+
+    # Inicializa variáveis de sessão necessárias
+    st.session_state.setdefault("sel_phase_full", "Todas")
+    st.session_state.setdefault("q_terms", [])
+
+    st.markdown("<h2 style='margin: 6px 0 12px 0; font-size: 22px;'>Filtros</h2>", unsafe_allow_html=True)
+    top1, top2 = st.columns([1.1, 1.9])
+    status_labels = ["Todas"] + [f"{full} ({full2short.get(full, '')})" for full in phase_list_full]
+    sel_status_label = top1.selectbox(
+        "Selecione o status", status_labels,
+        index=status_labels.index(st.session_state["sel_phase_full"])
+        if st.session_state["sel_phase_full"] in status_labels else 0,
+        key="sel_phase_box",
+    )
+    st.session_state["sel_phase_full"] = sel_status_label
+
+    def _add_q_term():
+        val = st.session_state.get("q_search_new", "").strip()
+        if val:
+            parts = [p.strip() for p in val.replace(";", "\n").replace(",", "\n").splitlines() if p.strip()]
+            cur = list(st.session_state.get("q_terms", []))
+            for p in parts:
+                if not any(p.lower() == c.lower() for c in cur):
+                    cur.append(p)
+            st.session_state["q_terms"] = cur
+            st.session_state["q_search_new"] = ""
+        top2.text_input(
+            "Pesquisar (SITE, status, UF/Regional, Subcon, Type, Model, PO)",
+            placeholder="Digite e pressione Enter para adicionar",
+            key="q_search_new",
+            on_change=_add_q_term,
+        )
         try:
-            st.session_state.rollout_file_path = str(target_path)
+            if st.session_state.get("q_terms"):
+                chips = st.session_state.get("q_terms", [])
+                _cchips = st.container()
+                with _cchips:
+                    st.write("Pesquisas:", ", ".join([f"'{t}'" for t in chips]))
+                    if st.button("Limpar pesquisas", key="btn_clear_terms"):
+                        st.session_state["q_terms"] = []
         except Exception:
             pass
-        st.success("Planilha carregada!")
-
-    if "rollout_df_raw" not in st.session_state:
-        st.info("Carregue a planilha para continuar.")
-        return
-
-    df_raw = st.session_state.rollout_df_raw
-    df_clean = st.session_state.rollout_df_clean
-
-    # Pequeno espaco entre upload e a primeira tabela
-    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
-    # ========== 2) KPIs por fase (linha 6) ==========
-    kpi = kpi_from_explicit_cells(df_raw, method="header", sites_col_letter="E").copy()
-    kpi = kpi.rename(columns={"qtd": "Concluidos"})
-    # Computa total a partir de Concluidos + faltam
-    kpi["total"] = kpi["Concluidos"] + kpi["faltam"]
-
-    # Visualizacao por Status (unica secao atual)
-    if not st.session_state.get("show_status", True):
-        if st.session_state.get("show_lead", True):
-            render_lead_analysis(df_raw, sites_f)
-        return
-    
-    # Titulo grande para a secao
-    st.markdown(
-        """
-        <h2 style='margin: 6px 0 12px 0; font-size: 28px;'>Visualizacao por Status</h2>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # Tabela 'Status em geral (arquivo)'
-    with st.expander("Status em geral (Overview)", expanded=False):
-        st.markdown('<div class="mobile-scroll">', unsafe_allow_html=True)
-        st.dataframe(
-            kpi[["fase_curta", "Concluidos", "faltam", "total"]].set_index("fase_curta"),
-            use_container_width=True,
-        )
-
-    
-    
-    
-
-    # Mapeamentos: agora incluem as fases iniciais (1.x, 2.x, 3.1, 4.1, ...)
-    phase_map = get_explicit_phase_map(df_raw)  # [(full, short, col_idx)]
-    full_to_short = {full: short for (full, short, _c) in phase_map}
-    short_to_full = {short: full for (full, short, _c) in phase_map}
+        r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+        r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+        r3c1, r3c2, r3c3, r3c4 = st.columns(4)
+        uf_opts = sorted(df_clean.get("state", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+        reg_opts = sorted(df_clean.get("Group", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+        subcon_opts = sorted(df_clean.get("Subcon", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+        type_opts = sorted(df_clean.get("Type", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+        model_opts = sorted(df_clean.get("Model", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+        po_opts = sorted(df_clean.get("Infra PO", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+        sel_uf = r1c1.multiselect("UF", uf_opts, default=[], key="f_uf")
+        sel_reg = r1c2.multiselect("Regional", reg_opts, default=[], key="f_reg")
+        sel_subcon = r1c3.multiselect("Subcon", subcon_opts, default=[], key="f_subcon")
+        sel_type = r1c4.multiselect("Type", type_opts, default=[], key="f_type")
+        sel_model = r2c1.multiselect("Model", model_opts, default=[], key="f_model")
+        sel_po = r2c2.multiselect("PO", po_opts, default=[], key="f_po")
+        if "year" in df_clean.columns:
+            year_series = pd.to_numeric(df_clean["year"], errors="coerce").dropna()
+            year_opts = sorted({int(y) for y in year_series.tolist()})
+        else:
+            year_opts = []
+        sel_year = r2c3.multiselect("Ano", year_opts, default=[], key="f_year")
+        sel_carimbo = []
+        try:
+            carimbo_opts = sorted(df_clean["Carimbo"].dropna().astype(str).unique().tolist())
+            st.session_state.setdefault("f_carimbo", [])
+            sel_carimbo = r3c1.multiselect("Carimbo", carimbo_opts, default=[], key="f_carimbo")
+        except KeyError:
+            pass
+        lt_series = pd.to_numeric(df_clean.get("delay_days", pd.Series(index=df_clean.index)), errors="coerce").fillna(0)
+        lt_min = 0
+        lt_max = int(max(lt_series.max(), 0))
+        if lt_max == lt_min:
+            lt_max = lt_min + 1
+        if "slider_lt" not in st.session_state:
+            st.session_state["slider_lt"] = (int(lt_min), int(lt_max))
+        lt_sel = r2c4.slider("Lead time (dias)", min_value=int(lt_min), max_value=int(lt_max),
+                            value=st.session_state.get("slider_lt", (int(lt_min), int(lt_max))),
+                            step=1, key="slider_lt")
     phase_list_full = [full for (full, _s, _c) in phase_map]
+    
 
     # Estados padrao
     st.session_state.setdefault("viz_type", "Barras")
@@ -1003,184 +1094,180 @@ def page_rollout():
 
 
 
-    # ========== 5) e 6) Filtros ==========
-    with st.expander("Filtros", expanded=True):
-        # Layout superior: status + pesquisa
-        top1, top2 = st.columns([1.1, 1.9])
 
-        # Filtro de status
-        #Construcao da variavel sites
-        order_full = [full for (full, short, _c) in phase_map]
-        order_short = [short for (full, short, _c) in phase_map]
-        short2idx = {s: i for i, s in enumerate(order_short)}
-        full2short = {full: short for (full, short, _c) in phase_map}
-        
-        
-        # Se nao vier pronto do ETL, derive o 'full' pelo mapa
-        short2full = {s: f for (f, s, _c) in phase_map}
-        # Snapshot (sempre com last_phase_full)
-        snap = last_status_snapshot(df_raw)[
-            ["SITE", "last_phase_short", "last_phase_full", "last_date"]
-        ].copy()
+    # ========== NOVO SUBTÍTULO: Filtros ========== 
+    st.markdown("<h2 style='margin: 6px 0 12px 0; font-size: 22px;'>Filtros</h2>", unsafe_allow_html=True)
+    # Layout superior: status + pesquisa
+    top1, top2 = st.columns([1.1, 1.9])
 
-        # Normalizacoes e campos derivados
-        snap["last_phase_short"] = (
-            snap["last_phase_short"].astype(str).where(snap["last_phase_short"].isin(order_short), None)
-        )
-        snap["last_idx"] = snap["last_phase_short"].map(short2idx)
-        snap["current_idx"] = snap["last_idx"].fillna(-1).astype(int) + 1
-        snap["current_idx"] = snap["current_idx"].clip(0, len(order_short) - 1)
-        snap["current_short"] = snap["current_idx"].map(lambda i: order_short[i])
-        snap["current_full"]  = snap["current_short"].map(short2full)
+    # Filtro de status
+    order_full = [full for (full, short, _c) in phase_map]
+    order_short = [short for (full, short, _c) in phase_map]
+    short2idx = {s: i for i, s in enumerate(order_short)}
+    full2short = {full: short for (full, short, _c) in phase_map}
+    short2full = {s: f for (f, s, _c) in phase_map}
+    snap = last_status_snapshot(df_raw)[
+        ["SITE", "last_phase_short", "last_phase_full", "last_date"]
+    ].copy()
+    snap["last_phase_short"] = (
+        snap["last_phase_short"].astype(str).where(snap["last_phase_short"].isin(order_short), None)
+    )
+    snap["last_idx"] = snap["last_phase_short"].map(short2idx)
+    snap["current_idx"] = snap["last_idx"].fillna(-1).astype(int) + 1
+    snap["current_idx"] = snap["current_idx"].clip(0, len(order_short) - 1)
+    if order_short:
+        snap["current_short"] = snap["current_idx"].map(lambda i: order_short[i] if 0 <= i < len(order_short) else None)
+    else:
+        snap["current_short"] = None
+    snap["current_full"]  = snap["current_short"].map(short2full)
 
+    cols_keep = [c for c in [
+        "SITE", "state", "Group", "Subcon", "Type", "Qty", "Model", "Infra PO", "current_status", "year"
+    ] if c in df_clean.columns]
+    static = df_clean[cols_keep].drop_duplicates(subset=["SITE"]).copy()
+    static = static.rename(columns={"Infra PO": "PO", "Group": "Regional"})
+    if "UF" not in static.columns and "state" in static.columns:
+        static["UF"] = static["state"]
 
-        cols_keep = [c for c in [
-            "SITE", "state", "Group", "Subcon", "Type", "Qty", "Model", "Infra PO", "current_status", "year"
-        ] if c in df_clean.columns]
-        static = df_clean[cols_keep].drop_duplicates(subset=["SITE"]).copy()
-        static = static.rename(columns={"Infra PO": "PO", "Group": "Regional"})
-        if "UF" not in static.columns and "state" in static.columns:
-            static["UF"] = static["state"]
+    delay_df = last_delay_days(df_raw)[["SITE", "delay_days"]].copy()
+    delay_df["delay_days"] = pd.to_numeric(delay_df["delay_days"], errors="coerce").fillna(0).astype(int)
 
-        delay_df = last_delay_days(df_raw)[["SITE", "delay_days"]].copy()
-        delay_df["delay_days"] = pd.to_numeric(delay_df["delay_days"], errors="coerce").fillna(0).astype(int)
+    # Final merge para construir sites
+    sites = snap.merge(static, on="SITE", how="left").merge(delay_df, on="SITE", how="left")
 
-        # Final merge para construir sites
-        sites = snap.merge(static, on="SITE", how="left").merge(delay_df, on="SITE", how="left")
+    status_labels = ["Todas"] + [f"{full} ({full2short.get(full, '')})" for full in phase_list_full]
+    sel_status_label = top1.selectbox(
+        "Selecione o status", status_labels,
+        index=status_labels.index(st.session_state.sel_phase_full)
+        if st.session_state.sel_phase_full in status_labels else 0,
+        key="sel_phase_box",
+    )
+    st.session_state.sel_phase_full = sel_status_label
 
-        status_labels = ["Todas"] + [f"{full} ({full_to_short[full]})" for full in phase_list_full]
-        sel_status_label = top1.selectbox(
-            "Selecione o status", status_labels,
-            index=status_labels.index(st.session_state.sel_phase_full)
-            if st.session_state.sel_phase_full in status_labels else 0,
-            key="sel_phase_box",
-        )
-        st.session_state.sel_phase_full = sel_status_label
+    # Filtro de pesquisa por termos
+    st.session_state.setdefault("q_terms", [])
+    def _add_q_term():
+        val = st.session_state.get("q_search_new", "").strip()
+        if val:
+            parts = [p.strip() for p in val.replace(";", "\n").replace(",", "\n").splitlines() if p.strip()]
+            cur = list(st.session_state.get("q_terms", []))
+            for p in parts:
+                if not any(p.lower() == c.lower() for c in cur):
+                    cur.append(p)
+            st.session_state["q_terms"] = cur
+        st.session_state["q_search_new"] = ""
 
-        # Filtro de pesquisa por termos
-        st.session_state.setdefault("q_terms", [])
-        def _add_q_term():
-            val = st.session_state.get("q_search_new", "").strip()
-            if val:
-                parts = [p.strip() for p in val.replace(";", "\n").replace(",", "\n").splitlines() if p.strip()]
-                cur = list(st.session_state.get("q_terms", []))
-                for p in parts:
-                    if not any(p.lower() == c.lower() for c in cur):
-                        cur.append(p)
-                st.session_state["q_terms"] = cur
-            st.session_state["q_search_new"] = ""
+    top2.text_input(
+        "Pesquisar (SITE, status, UF/Regional, Subcon, Type, Model, PO)",
+        placeholder="Digite e pressione Enter para adicionar",
+        key="q_search_new",
+        on_change=_add_q_term,
+    )
 
-        top2.text_input(
-            "Pesquisar (SITE, status, UF/Regional, Subcon, Type, Model, PO)",
-            placeholder="Digite e pressione Enter para adicionar",
-            key="q_search_new",
-            on_change=_add_q_term,
-        )
+    # Mostrar termos adicionados
+    try:
+        if st.session_state.get("q_terms"):
+            chips = st.session_state.get("q_terms", [])
+            _cchips = st.container()
+            with _cchips:
+                st.write("Pesquisas:", ", ".join([f"'{t}'" for t in chips]))
+                if st.button("Limpar pesquisas", key="btn_clear_terms"):
+                    st.session_state["q_terms"] = []
+    except Exception:
+        pass
 
-        # Mostrar termos adicionados
-        try:
-            if st.session_state.get("q_terms"):
-                chips = st.session_state.get("q_terms", [])
-                _cchips = st.container()
-                with _cchips:
-                    st.write("Pesquisas:", ", ".join([f"'{t}'" for t in chips]))
-                    if st.button("Limpar pesquisas", key="btn_clear_terms"):
-                        st.session_state["q_terms"] = []
-        except Exception:
-            pass
+    # Layout dos filtros visuais
+    r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+    r2c1, r2c2, r2c3, r2c4 = st.columns(4)
+    r3c1, r3c2, r3c3, r3c4 = st.columns(4)
 
-        # Layout dos filtros visuais
-        r1c1, r1c2, r1c3, r1c4 = st.columns(4)
-        r2c1, r2c2, r2c3, r2c4 = st.columns(4)
-        r3c1, r3c2, r3c3, r3c4 = st.columns(4)
+    # Construcao do base_all com fases
+    frames = []
+    for full, short, _c in phase_map:
+        tmp = sites_for_phase_explicit(df_raw, df_clean, full)
+        tmp["fase_label"] = full
+        tmp["fase_curta"] = short
+        frames.append(tmp)
+    base_all = pd.concat(frames, ignore_index=True)
 
-        # Construcao do base_all com fases
-        frames = []
-        for full, short, _c in phase_map:
-            tmp = sites_for_phase_explicit(df_raw, df_clean, full)
-            tmp["fase_label"] = full
-            tmp["fase_curta"] = short
-            frames.append(tmp)
-        base_all = pd.concat(frames, ignore_index=True)
+    # Normalizacoes
+    if "Infra PO" in base_all.columns and "PO" not in base_all.columns:
+        base_all = base_all.rename(columns={"Infra PO": "PO"})
+    if "Group" in base_all.columns and "Regional" not in base_all.columns:
+        base_all = base_all.rename(columns={"Group": "Regional"})
+    if "UF" not in base_all.columns and "state" in base_all.columns:
+        base_all["UF"] = base_all["state"]
 
-        # Normalizacoes
-        if "Infra PO" in base_all.columns and "PO" not in base_all.columns:
-            base_all = base_all.rename(columns={"Infra PO": "PO"})
-        if "Group" in base_all.columns and "Regional" not in base_all.columns:
-            base_all = base_all.rename(columns={"Group": "Regional"})
-        if "UF" not in base_all.columns and "state" in base_all.columns:
-            base_all["UF"] = base_all["state"]
-
-        # Enriquecer "sites" com o ano consolidado nas fases
-        try:
-            year_lookup = base_all[["SITE", "year"]].dropna().drop_duplicates(subset=["SITE"])
-            if "year" in sites.columns:
-                sites = sites.merge(year_lookup, on="SITE", how="left", suffixes=("", "_from_base"))
-                if "year_from_base" in sites.columns:
-                    base_year = pd.to_numeric(sites["year_from_base"], errors="coerce")
-                    cur_year = pd.to_numeric(sites.get("year"), errors="coerce")
-                    sites["year"] = cur_year.where(cur_year.notna(), base_year)
-                    sites = sites.drop(columns=["year_from_base"])
-            else:
-                sites = sites.merge(year_lookup, on="SITE", how="left")
-            sites["year"] = pd.to_numeric(sites.get("year"), errors="coerce").astype("Int64")
-        except Exception:
-            pass
-
-        # Snapshot e atraso
-        snap_all = last_status_snapshot(df_raw)[["SITE", "last_phase_short", "last_date"]]
-        delay_all = last_delay_days(df_raw)[["SITE", "delay_days"]]
-        base_all = base_all.merge(snap_all, on="SITE", how="left").merge(delay_all, on="SITE", how="left")
-
-        # Ano
-        if "year" not in base_all.columns or base_all["year"].isna().all():
-            year_guess = pd.to_datetime(base_all.get("actual_date"), errors="coerce").dt.year
-            year_guess = year_guess.fillna(pd.to_datetime(base_all.get("last_date"), errors="coerce").dt.year)
-            base_all["year"] = year_guess
-
-        # Filtros visuais com base no df_clean
-        uf_opts = sorted(df_clean.get("state", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
-        reg_opts = sorted(df_clean.get("Group", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
-        subcon_opts = sorted(df_clean.get("Subcon", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
-        type_opts = sorted(df_clean.get("Type", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
-        model_opts = sorted(df_clean.get("Model", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
-        po_opts = sorted(df_clean.get("Infra PO", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
-
-        sel_uf = r1c1.multiselect("UF", uf_opts, default=[], key="f_uf")
-        sel_reg = r1c2.multiselect("Regional", reg_opts, default=[], key="f_reg")
-        sel_subcon = r1c3.multiselect("Subcon", subcon_opts, default=[], key="f_subcon")
-        sel_type = r1c4.multiselect("Type", type_opts, default=[], key="f_type")
-        sel_model = r2c1.multiselect("Model", model_opts, default=[], key="f_model")
-        sel_po = r2c2.multiselect("PO", po_opts, default=[], key="f_po")
-
-        # Filtro de ano
-        if "year" in base_all.columns:
-            year_series = pd.to_numeric(base_all["year"], errors="coerce").dropna()
-            year_opts = sorted({int(y) for y in year_series.tolist()})
+    # Enriquecer "sites" com o ano consolidado nas fases
+    try:
+        year_lookup = base_all[["SITE", "year"]].dropna().drop_duplicates(subset=["SITE"])
+        if "year" in sites.columns:
+            sites = sites.merge(year_lookup, on="SITE", how="left", suffixes=("", "_from_base"))
+            if "year_from_base" in sites.columns:
+                base_year = pd.to_numeric(sites["year_from_base"], errors="coerce")
+                cur_year = pd.to_numeric(sites.get("year"), errors="coerce")
+                sites["year"] = cur_year.where(cur_year.notna(), base_year)
+                sites = sites.drop(columns=["year_from_base"])
         else:
-            year_opts = []
-        sel_year = r2c3.multiselect("Ano", year_opts, default=[], key="f_year")
+            sites = sites.merge(year_lookup, on="SITE", how="left")
+        sites["year"] = pd.to_numeric(sites.get("year"), errors="coerce").astype("Int64")
+    except Exception:
+        pass
 
-        # Filtro de carimbo (se existir)
-        sel_carimbo = []
-        try:
-            carimbo_opts = sorted(base_all["Carimbo"].dropna().astype(str).unique().tolist())
-            st.session_state.setdefault("f_carimbo", [])
-            sel_carimbo = r3c1.multiselect("Carimbo", carimbo_opts, default=[], key="f_carimbo")
-        except KeyError:
-            pass
+    # Snapshot e atraso
+    snap_all = last_status_snapshot(df_raw)[["SITE", "last_phase_short", "last_date"]]
+    delay_all = last_delay_days(df_raw)[["SITE", "delay_days"]]
+    base_all = base_all.merge(snap_all, on="SITE", how="left").merge(delay_all, on="SITE", how="left")
 
-        # Filtro de lead time
-        lt_series = pd.to_numeric(base_all.get("delay_days", pd.Series(index=base_all.index)), errors="coerce").fillna(0)
-        lt_min = 0
-        lt_max = int(max(lt_series.max(), 0))
-        if lt_max == lt_min:
-            lt_max = lt_min + 1
-        if "slider_lt" not in st.session_state:
-            st.session_state["slider_lt"] = (int(lt_min), int(lt_max))
-        lt_sel = r2c4.slider("Lead time (dias)", min_value=int(lt_min), max_value=int(lt_max),
-                            value=st.session_state.get("slider_lt", (int(lt_min), int(lt_max))),
-                            step=1, key="slider_lt")
+    # Ano
+    if "year" not in base_all.columns or base_all["year"].isna().all():
+        year_guess = pd.to_datetime(base_all.get("actual_date"), errors="coerce").dt.year
+        year_guess = year_guess.fillna(pd.to_datetime(base_all.get("last_date"), errors="coerce").dt.year)
+        base_all["year"] = year_guess
+
+    # Filtros visuais com base no df_clean
+    uf_opts = sorted(df_clean.get("state", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+    reg_opts = sorted(df_clean.get("Group", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+    subcon_opts = sorted(df_clean.get("Subcon", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+    type_opts = sorted(df_clean.get("Type", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+    model_opts = sorted(df_clean.get("Model", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+    po_opts = sorted(df_clean.get("Infra PO", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+
+    sel_uf = r1c1.multiselect("UF", uf_opts, default=[], key="f_uf")
+    sel_reg = r1c2.multiselect("Regional", reg_opts, default=[], key="f_reg")
+    sel_subcon = r1c3.multiselect("Subcon", subcon_opts, default=[], key="f_subcon")
+    sel_type = r1c4.multiselect("Type", type_opts, default=[], key="f_type")
+    sel_model = r2c1.multiselect("Model", model_opts, default=[], key="f_model")
+    sel_po = r2c2.multiselect("PO", po_opts, default=[], key="f_po")
+
+    # Filtro de ano
+    if "year" in base_all.columns:
+        year_series = pd.to_numeric(base_all["year"], errors="coerce").dropna()
+        year_opts = sorted({int(y) for y in year_series.tolist()})
+    else:
+        year_opts = []
+    sel_year = r2c3.multiselect("Ano", year_opts, default=[], key="f_year")
+
+    # Filtro de carimbo (se existir)
+    sel_carimbo = []
+    try:
+        carimbo_opts = sorted(base_all["Carimbo"].dropna().astype(str).unique().tolist())
+        st.session_state.setdefault("f_carimbo", [])
+        sel_carimbo = r3c1.multiselect("Carimbo", carimbo_opts, default=[], key="f_carimbo")
+    except KeyError:
+        pass
+
+    # Filtro de lead time
+    lt_series = pd.to_numeric(base_all.get("delay_days", pd.Series(index=base_all.index)), errors="coerce").fillna(0)
+    lt_min = 0
+    lt_max = int(max(lt_series.max(), 0))
+    if lt_max == lt_min:
+        lt_max = lt_min + 1
+    if "slider_lt" not in st.session_state:
+        st.session_state["slider_lt"] = (int(lt_min), int(lt_max))
+    lt_sel = r2c4.slider("Lead time (dias)", min_value=int(lt_min), max_value=int(lt_max),
+                        value=st.session_state.get("slider_lt", (int(lt_min), int(lt_max))),
+                        step=1, key="slider_lt")
 
 
 
@@ -1195,7 +1282,32 @@ def page_rollout():
     # 6.2) Aplicar filtros da UI ao snapshot
     mask_sites = pd.Series(True, index=sites.index)
 
-    # Nao restringe por "Selecione o status" aqui; deixa a filtragem fina para a etapa da tabela
+    # Aplicar filtro de status se não for "Todas"
+    if not _is_all_label(st.session_state.sel_phase_full):
+        chosen_full = st.session_state.sel_phase_full.split(" (")[0].strip()
+        chosen_short = full2short.get(chosen_full)
+        
+        # Filtrar por status selecionado (mesmo critério usado na tabela abaixo)
+        if chosen_short:
+            # Para Concluídos: sites que têm data na coluna do status escolhido
+            _site_col, wide_f = etl._actuals_wide(df_raw)
+            concl_sites = set()
+            if chosen_short in wide_f.columns:
+                concl_mask = pd.to_datetime(wide_f[chosen_short], errors="coerce").notna()
+                concl_sites = set(wide_f.loc[concl_mask, "SITE"].astype(str))
+                
+            # Para Faltando: sites com current_short == chosen_short (próximo status é o escolhido)
+            pend_mask = sites["current_short"].astype(str) == str(chosen_short)
+            pend_sites = set(sites.loc[pend_mask, "SITE"].astype(str))
+            
+            # Aplicar filtro conforme Situação (Concluídos, Faltando ou Ambos)
+            esc = st.session_state.get("escopo", "Ambos")
+            if esc == "Concluidos":
+                mask_sites &= sites["SITE"].astype(str).isin(concl_sites)
+            elif esc == "Faltando":
+                mask_sites &= pend_mask
+            else:  # Ambos
+                mask_sites &= (pend_mask | sites["SITE"].astype(str).isin(concl_sites))
 
     if sel_uf:
         mask_sites &= sites["UF"].astype(str).isin(sel_uf)
@@ -1289,6 +1401,8 @@ def page_rollout():
         return None
     _ts_suffix = _current_data_suffix()
 
+    fig = None  # Initialize fig to None at the beginning of the scope
+
     if total_sites <= 0 or bars.empty:
         st.info("Nenhum site restante com os filtros atuais.")
         fig = None
@@ -1344,6 +1458,18 @@ def page_rollout():
 
     if fig is not None:
         st.plotly_chart(fig, use_container_width=True, key="status_main_chart")
+
+
+    # Add logic to handle "Pizza" visualization type
+    if st.session_state.get("viz_type") == "Pizza":
+        fig = px.pie(
+            data_frame=sites_f,
+            names="current_status",
+            values="delay_days",
+            title="Distribuição por Status",
+            color_discrete_sequence=px.colors.qualitative.Pastel,
+        )
+        st.plotly_chart(fig, use_container_width=True, key="status_pie_chart")
 
 
     table_df = sites_f.copy()
@@ -1406,6 +1532,7 @@ def page_rollout():
     # ========== 7) Analise de lead time ==========
     if st.session_state.get("show_lead", True):
         render_lead_analysis(df_raw, sites_f)
+
         
         
         
@@ -1418,6 +1545,10 @@ def page_rollout():
         
     
 
+
+# Ensure sites_f is initialized independently
+if "sites_f" not in locals():
+    sites_f = pd.DataFrame()  # Fallback to an empty DataFrame if not defined
 
 # ---------------- Router ----------------
 current_route = st.session_state.get("route", "rollout")
