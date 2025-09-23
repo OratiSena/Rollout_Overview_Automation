@@ -100,7 +100,10 @@ def page_integracao() -> None:
         st.stop()
 
     # Remover números das datas
-    df["Integration date"] = df["Integration date"].dt.date
+    date_columns = ["Integration date"]
+    for col in date_columns:
+        if col in df.columns:
+            df[col] = df[col].dt.date
 
     st.success(f"Planilha carregada com {len(df):,} linhas.")
 
