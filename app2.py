@@ -162,11 +162,7 @@ def page_integracao() -> None:
             "Pendência KPI": "Pending"
         }
 
-        # Ensure 'Need Update' is mapped correctly and verify data consistency
         status_counts["Status"] = status_counts["Status"].map(status_mapping).fillna(status_counts["Status"])
-
-        # Debugging: Print unique statuses to verify mapping
-        st.write("Unique statuses in data:", status_counts["Status"].unique())
 
         fig = px.bar(
             status_counts,
