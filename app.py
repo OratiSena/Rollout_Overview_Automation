@@ -377,8 +377,8 @@ def reset_all():
 
     # Visualizacao / Status (defaults)
     st.session_state["viz_type"] = "Barras"
-    st.session_state["escopo"] = "Ambos"
-    st.session_state["sit_radio"] = "Ambos"
+    st.session_state["escopo"] = "Geral"
+    st.session_state["sit_radio"] = "Geral"
     st.session_state["viz_type_radio"] = "Barras"
 
     # Se salvarmos selecoes por clique em session_state, limpe aqui tambem
@@ -994,7 +994,7 @@ def page_rollout():
 
     # Estados padrao
     st.session_state.setdefault("viz_type", "Barras")
-    st.session_state.setdefault("escopo", "Ambos")
+    st.session_state.setdefault("escopo", "Geral")
     st.session_state.setdefault("sel_phase_full", "Todas")
     st.session_state.setdefault("q_search", "")
     for _k in ("f_uf", "f_reg", "f_subcon", "f_type", "f_model", "f_po", "f_year", "f_carimbo"):
@@ -1017,10 +1017,10 @@ def page_rollout():
         )
         st.session_state["viz_type"] = viz_type
 
-        sit_opts = ["Concluidos", "Faltando"] + (["Ambos"] if viz_type == "Barras" else [])
-        default_sit = st.session_state.get("escopo", "Ambos")
+        sit_opts = ["Concluidos", "Faltando"] + (["Geral"] if viz_type == "Barras" else [])
+        default_sit = st.session_state.get("escopo", "Geral")
         if default_sit not in sit_opts:
-            default_sit = "Concluidos" if viz_type == "Pizza" else "Ambos"
+            default_sit = "Concluidos" if viz_type == "Pizza" else "Geral"
         Status = col_sit.radio("Status", sit_opts, horizontal=True, index=sit_opts.index(default_sit), key="sit_radio")
         st.session_state["escopo"] = Status
 
@@ -1322,7 +1322,7 @@ def page_rollout():
         st.info("Nenhum site restante com os filtros atuais.")
         fig = None
     elif viz_type == "Barras":
-        if Status == "Ambos":
+        if Status == "Geral":
             long = bars.melt(
                 id_vars=["fase_curta"],
                 value_vars=["Concluidos", "Faltando"],
@@ -1332,6 +1332,7 @@ def page_rollout():
         else:
             keep = Status
             long = bars.rename(columns={keep: "valor"})[["fase_curta", "valor"]].assign(tipo=keep)
+
         max_total = float(bars["total"].max()) if not bars.empty else 0.0
         pad_total = max_total * 0.1
         is_mobile_chart = _is_mobile_viewport()
@@ -1345,7 +1346,7 @@ def page_rollout():
                 color_discrete_map={"Concluidos": "#1f77b4", "Faltando": "#ff7f0e"},
                 category_orders={"tipo": ["Concluidos", "Faltando"], "fase_curta": order_short},
                 text="valor",
-                barmode="stack" if Status == "Ambos" else "relative",
+                barmode="stack" if Status == "Geral" else "relative",
                 title=("Sites por status (concluidos x faltando)" + (f" | {_ts_suffix}" if _ts_suffix else "")),
             )
             fig.update_traces(texttemplate="%{text}", textposition="outside", textangle=0, textfont=dict(size=12))
@@ -1361,7 +1362,7 @@ def page_rollout():
                 color_discrete_map={"Concluidos": "#1f77b4", "Faltando": "#ff7f0e"},
                 category_orders={"tipo": ["Concluidos", "Faltando"], "fase_curta": order_short},
                 text="valor",
-                barmode="stack" if Status == "Ambos" else "relative",
+                barmode="stack" if Status == "Geral" else "relative",
                 title=("Sites por status (concluidos x faltando)" + (f" | {_ts_suffix}" if _ts_suffix else "")),
             )
             fig.update_traces(texttemplate="%{text}", textangle=0)
@@ -1402,12 +1403,12 @@ def page_rollout():
         # Faltando: exatamente os que estao PENDENTES nesse status (fase_curta == chosen_short)
         pend_mask = table_df["fase_curta"].astype(str) == str(chosen_short)
 
-        esc = st.session_state.get("escopo", "Ambos")
+        esc = st.session_state.get("escopo", "Geral")
         if esc == "Concluidos":
             table_df = table_df[table_df["SITE"].astype(str).isin(concl_sites)]
         elif esc == "Faltando":
             table_df = table_df[pend_mask]
-        else:  # Ambos
+        else:  # Geral
             table_df = table_df[pend_mask | table_df["SITE"].astype(str).isin(concl_sites)]
 
     # (Opcional) badge de status para o status selecionado
