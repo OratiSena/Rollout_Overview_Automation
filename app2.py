@@ -118,14 +118,12 @@ def page_integracao() -> None:
         st.error(f"Erro ao processar os dados: {e}")
         st.stop()
 
-    # Remover números das datas
-    date_columns = ["Integration date"]
-    for col in date_columns:
-        if col in df.columns:
-            df[col] = df[col].dt.date
+    # Remover horários: converter qualquer coluna datetime para date (aplica às tabelas)
+    for col in df.select_dtypes(include=["datetime64[ns]", "datetime64"]).columns:
+        df[col] = df[col].dt.date
 
-    # Adjusting the graph colors and x-axis label
-    # Filter out rows with empty 'Site Name'
+    # Ajustando as cores dos gráficos e rótulo do eixo x
+    # Filtrar linhas com 'Site Name' vazio
     df = df[df["Site Name"].notna()]
 
     # Filtrar apenas sites com valores válidos em 'General Status'
@@ -168,7 +166,7 @@ def page_integracao() -> None:
     if graph_option == "Integração Concluído x Faltando":
         # Gráfico de Integração Concluído x Faltando
         integration_columns = [
-            "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 4G", "OT 2G", "OT Status"
+            "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"
         ]
 
         status_counts = pd.concat([
@@ -182,10 +180,10 @@ def page_integracao() -> None:
                 return None  # Ignorar valores nulos
             v = str(s).strip().lower()
             # Concluido
-            if v in {"finished", "waiting approval", "waiting", "aguardando aprovação"}:
+            if v in {"finished"}:
                 return "Concluido"
             # Faltando
-            if v in {"pending", "kpi rejected", "pendência", "pendência kpi", "upload to iw"}:
+            if v in {"pending", "kpi rejected", "pendência", "pendência kpi", "upload to iw", "waiting approval", "waiting", "aguardando aprovação"}:
                 return "Faltando"
             # Unknown ou outros valores não devem ser contados
             return None
@@ -200,6 +198,9 @@ def page_integracao() -> None:
             status_counts.groupby(["Type", "Status"])["Count"].sum().reset_index()
         )
 
+        # Garantir ordem das categorias no eixo x conforme integration_columns
+        status_counts["Type"] = pd.Categorical(status_counts["Type"], categories=integration_columns, ordered=True)
+
         fig = px.bar(
             status_counts,
             x="Type",
@@ -208,7 +209,7 @@ def page_integracao() -> None:
             text="Count",
             title="Resumo do Status por Categoria",
             labels={"Type": "Categoria", "Count": "Quantidade", "Status": "Status"},
-            category_orders={"Status": ["Concluido", "Faltando"]},
+            category_orders={"Type": integration_columns, "Status": ["Concluido", "Faltando"]},
             color_discrete_map={
                 "Concluido": "#1f77b4",  # Azul similar ao rollout
                 "Faltando": "#ff7f0e",   # Laranja similar ao rollout
@@ -245,9 +246,60 @@ def page_integracao() -> None:
     ]
     existing_cols = [c for c in desired_columns if c in df.columns]
     status_summary = df[existing_cols]
-    st.dataframe(status_summary, use_container_width=True)
 
-    # Tabela Fiel
+    # ---- Converter status para a PRIMEIRA tabela (apenas) para Concluido / Faltando ----
+    # Mapear valores para Concluido / Faltando (aplica-se somente na tabela de resumo)
+    def map_to_two(s):
+        if pd.isna(s):
+            return None
+        v = str(s).strip().lower()
+        if v == "finished":
+            return "Concluido"
+        if v in {"pending", "kpi rejected", "pendência", "pendência kpi", "pendencia", "upload to iw", "waiting approval", "waiting", "aguardando aprovação"}:
+            return "Faltando"
+        return None
+
+    # Aplicar a transformação somente nas colunas de teste/status presentes
+    status_cols = [c for c in ["4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"] if c in status_summary.columns]
+    summary_for_display = status_summary.copy()
+    for c in status_cols:
+        summary_for_display[c] = summary_for_display[c].map(map_to_two)
+
+    # Estilização da tabela de resumo: Concluido (azul), Faltando (laranja)
+    def style_two(val):
+        if pd.isna(val):
+            return ""
+        v = str(val).strip().lower()
+        if v == "concluido":
+            return "color: #1f77b4; font-weight: 600"
+        if v == "faltando":
+            return "color: #ff7f0e; font-weight: 600"
+        return ""
+
+    if not summary_for_display.empty:
+        styled_summary = summary_for_display.style.applymap(style_two, subset=status_cols)
+        st.dataframe(styled_summary, use_container_width=True)
+    else:
+        st.write("Nenhum registro para exibir na tabela de resumo.")
+
+    # ---- Tabela Fiel: manter valores originais (fiel), mas aplicar cores por valor ----
+    # Cores por valor usadas na planilha (aproximação):
+    faithful_colors = {
+        "finished": "background-color: #d4edda; color: #155724",  # greenish
+        "pending": "background-color: #fff3cd; color: #856404",   # orange/yellow
+        "kpi rejected": "background-color: #f8d7da; color: #721c24",  # red-ish
+        "waiting approval": "background-color: #cfe2ff; color: #084298",  # blue-ish
+        "upload to iw": "background-color: #d1ecf1; color: #0c5460",  # light-blue
+        "on going": "background-color: #cfe2ff; color: #084298",  # blue-ish (On going)
+        "ongoing": "background-color: #cfe2ff; color: #084298"  # variant
+    }
+
+    def style_faithful(val):
+        if pd.isna(val):
+            return ""
+        v = str(val).strip().lower()
+        return faithful_colors.get(v, "")
+
     st.markdown(
         """
         <h2 style='margin: 12px 0; font-size: 24px;'>Tabela Fiel</h2>
@@ -255,7 +307,9 @@ def page_integracao() -> None:
         unsafe_allow_html=True,
     )
     with st.expander("Tabela Fiel", expanded=False):
-        st.dataframe(
-            df.style.set_properties(subset=["Comment"], **{"width": "300px"}),
-            use_container_width=True
-        )
+        # aplicar largura do Comment e coloração nas colunas de status existentes
+        fiel_status_cols = [c for c in ["General Status", "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"] if c in df.columns]
+        base_style = df.style.set_properties(subset=["Comment"] if "Comment" in df.columns else [], **{"width": "300px"})
+        if fiel_status_cols:
+            base_style = base_style.applymap(style_faithful, subset=fiel_status_cols)
+        st.dataframe(base_style, use_container_width=True)
