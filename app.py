@@ -359,7 +359,8 @@ def dark(fig: go.Figure) -> go.Figure:
         plot_bgcolor="rgba(0,0,0,0)",
         font_size=13,
         hoverlabel=dict(bgcolor="rgba(0,0,0,0.85)"),
-        legend=dict(title=None),
+        # Legend title set to 'Status' to label Concluidos / Faltando
+        legend_title_text="Status",
         margin=dict(t=60, r=30, b=28, l=55),
     )
     return fig
@@ -573,16 +574,34 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
 
     def _to_date_safe(series: pd.Series) -> pd.Series:
         s = pd.Series(series)  # garante Series
-        # 1) tenta parse “normal” (YYYY-MM-DD, etc.)
-        d = pd.to_datetime(s, errors="coerce")
-        # 2) no que ficou NaT, tenta serial Excel (dias desde 1899-12-30)
-        mask = d.isna()
-        num = pd.to_numeric(s[mask], errors="coerce")
-        # faixa plausível de seriais Excel (1 .. 2958465 ~= 9999-12-31)
-        ok = num.notna() & np.isfinite(num) & (num > 0) & (num <= 2_958_465)
-        if ok.any():
-            with np.errstate(all="ignore"):
-                d.loc[num[ok].index] = pd.to_datetime(num[ok], unit="D", origin="1899-12-30", errors="coerce")
+        # Trabalha separando strings de numeros para evitar que pequenos numeros
+        # sejam interpretados como timestamps Unix (1970).
+        # Tenta parse de formatos textuais primeiro; numeros tratados como seriais Excel quando plausiveis.
+        d = pd.Series(pd.NaT, index=s.index)
+
+        # Detecta valores numericos (podem vir como int/float ou numeric strings)
+        num = pd.to_numeric(s, errors="coerce")
+        mask_num = num.notna() & np.isfinite(num)
+        mask_str = ~mask_num
+
+        # 1) Parse para entradas nao-numericas (datas escritas)
+        if mask_str.any():
+            try:
+                d.loc[mask_str] = pd.to_datetime(s[mask_str], errors="coerce")
+            except Exception:
+                pass
+
+        # 2) Para entradas numericas, apenas converte se plausivel como serial Excel
+        if mask_num.any():
+            numv = num[mask_num]
+            ok = (numv > 0) & (numv <= 2_958_465)  # intervalo plausivel de seriais Excel
+            if ok.any():
+                with np.errstate(all="ignore"):
+                    try:
+                        d.loc[numv[ok].index] = pd.to_datetime(numv[ok], unit="D", origin="1899-12-30", errors="coerce")
+                    except Exception:
+                        pass
+
         return d
 
 
@@ -747,7 +766,8 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
         if _looks_date_col(col):
             ser = _to_date_safe(df_sel[col])
             if ser.notna().any():
-                df_sel[col] = ser.dt.strftime("%d-%b-%y").where(ser.notna(), df_sel[col])
+                # Mostra data formatada quando parse funcionou; caso contrario mostra vazio
+                df_sel[col] = ser.dt.strftime("%d-%b-%y").where(ser.notna(), "")
 
 
     # ---- COMPACTACAO para 2 niveis de exibicao ----
