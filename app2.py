@@ -153,16 +153,29 @@ def page_integracao() -> None:
             for col in integration_columns if col in df.columns
         ])
 
-        # Map statuses to the first set
-        status_mapping = {
-            "finished": "Finished",
-            "Need Update": "Need Update",
-            "Aguardando aprovação": "Waiting",
-            "Pendência": "Pending",
-            "Pendência KPI": "Pending"
-        }
+        # Map raw status values into three groups: Concluido, Faltando, NOK
+        def _map_to_group(s):
+            if pd.isna(s):
+                return "NOK"
+            v = str(s).strip().lower()
+            # Concluido
+            if v in {"finished", "waiting approval", "waiting", "aguardando aprovação", "finished ", "finished"}:
+                return "Concluido"
+            # Faltando
+            if v in {"pending", "kpi rejected", "pendência", "pendência kpi", "pendencia", "pendencia kpi"}:
+                return "Faltando"
+            # NOK (not ok)
+            if v in {"upload to iw", "unknown", "unknow", "upload to iw ", "upload to iw"}:
+                return "NOK"
+            # default: treat as NOK to surface problems
+            return "NOK"
 
-        status_counts["Status"] = status_counts["Status"].map(status_mapping).fillna(status_counts["Status"])
+        status_counts["Status"] = status_counts["Status"].map(_map_to_group)
+
+        # Aggregate counts after mapping
+        status_counts = (
+            status_counts.groupby(["Type", "Status"])["Count"].sum().reset_index()
+        )
 
         fig = px.bar(
             status_counts,
@@ -172,11 +185,11 @@ def page_integracao() -> None:
             text="Count",
             title="Resumo do Status por Categoria",
             labels={"Type": "Categoria", "Count": "Quantidade", "Status": "Status"},
+            category_orders={"Status": ["Concluido", "Faltando", "NOK"]},
             color_discrete_map={
-                "Finished": "#2ecc71",  # Verde vibrante
-                "Need Update": "#007bff",  # Azul vibrante
-                "Waiting": "#f1c40f",  # Amarelo vibrante
-                "Pending": "#e74c3c"   # Vermelho vibrante
+                "Concluido": "#1f77b4",  # Azul similar ao rollout
+                "Faltando": "#ff7f0e",   # Laranja similar ao rollout
+                "NOK": "#d62728",        # Vermelho
             }
         )
         fig.update_traces(textposition="outside")
