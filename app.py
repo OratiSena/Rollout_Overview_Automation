@@ -1183,14 +1183,16 @@ def page_rollout():
             year_opts = []
         sel_year = r2c3.multiselect("Ano", year_opts, default=[], key="f_year")
 
-        # Filtro de carimbo (se existir)
+        # Filtro de carimbo (aparece apenas se a coluna existir)
         sel_carimbo = []
-        try:
+        if "Carimbo" in base_all.columns:
             carimbo_opts = sorted(base_all["Carimbo"].dropna().astype(str).unique().tolist())
-            st.session_state.setdefault("f_carimbo", [])
-            sel_carimbo = r3c1.multiselect("Carimbo", carimbo_opts, default=[], key="f_carimbo")
-        except KeyError:
-            pass
+            if carimbo_opts:
+                st.session_state.setdefault("f_carimbo", [])
+                sel_carimbo = r3c1.multiselect("Carimbo", carimbo_opts, default=[], key="f_carimbo")
+            else:
+                # coluna existe mas nao ha opcoes preenchidas: garante chave vazia
+                st.session_state.setdefault("f_carimbo", [])
 
         # Filtro de lead time
         lt_series = pd.to_numeric(base_all.get("delay_days", pd.Series(index=base_all.index)), errors="coerce").fillna(0)
@@ -1419,6 +1421,18 @@ def page_rollout():
         # "sit_selected",  # (opcional) se ativar o badge acima
     ] if c in table_df.columns]
 
+    # Ensure 'Carimbo' only appears in the visual table when the underlying data has non-empty Carimbo values
+    if "Carimbo" in table_df.columns:
+        try:
+            non_empty = table_df["Carimbo"].dropna().astype(str).str.strip()
+            if not non_empty.any():
+                # remove Carimbo from cols_order if all values are empty/NaN
+                cols_order = [c for c in cols_order if c != "Carimbo"]
+        except Exception:
+            # if any issue, be conservative and remove the column from display
+            cols_order = [c for c in cols_order if c != "Carimbo"]
+
+    # Render the Visualizacao por Status table directly (no Opcoes da tabela here)
     st.markdown('<div class="mobile-scroll">', unsafe_allow_html=True)
     st.dataframe(table_df.reset_index(drop=True)[cols_order], use_container_width=True, height=430)
 
