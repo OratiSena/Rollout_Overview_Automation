@@ -1166,14 +1166,19 @@ def page_rollout():
         subcon_opts = sorted(df_clean.get("Subcon", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
         type_opts = sorted(df_clean.get("Type", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
         model_opts = sorted(df_clean.get("Model", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
-        po_opts = sorted(df_clean.get("Infra PO", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+        # PO options: prefer 'HLS Main PO' when present to avoid confusion with 'Infra Main PO'
+        if "HLS Main PO" in df_clean.columns:
+            po_opts = sorted(df_clean.get("HLS Main PO", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
+        else:
+            po_opts = sorted(df_clean.get("Infra PO", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
 
         sel_uf = r1c1.multiselect("UF", uf_opts, default=[], key="f_uf")
         sel_reg = r1c2.multiselect("Regional", reg_opts, default=[], key="f_reg")
         sel_subcon = r1c3.multiselect("Subcon", subcon_opts, default=[], key="f_subcon")
         sel_type = r1c4.multiselect("Type", type_opts, default=[], key="f_type")
         sel_model = r2c1.multiselect("Model", model_opts, default=[], key="f_model")
-        sel_po = r2c2.multiselect("PO", po_opts, default=[], key="f_po")
+        # Display label changed to 'HLS Main PO' for clarity (underlying key remains 'f_po')
+        sel_po = r2c2.multiselect("HLS Main PO", po_opts, default=[], key="f_po")
 
         # Filtro de ano
         if "year" in base_all.columns:
@@ -1415,6 +1420,80 @@ def page_rollout():
     if "current_status" not in table_df.columns:
         table_df["current_status"] = table_df.get("current_full", table_df.get("fase_label"))
 
+    # Ensure 'PO' column is present in the visual table so users can see/filter by PO
+    # Populate PO by looking in several places and preferring non-empty values
+    try:
+        # helper to coalesce multiple series by index
+        def _coalesce(*series_list):
+            out = pd.Series(index=series_list[0].index, dtype=object)
+            for s in series_list:
+                if s is None:
+                    continue
+                s2 = s.astype(str).replace("nan", "").fillna("")
+                mask = (~s2.str.strip().eq("")) & out.isna()
+                out.loc[mask] = s2.loc[mask]
+            # final fill with empty string
+            out = out.fillna("")
+            return out
+
+        existing_po = table_df.get("PO") if "PO" in table_df.columns else None
+        infra_po_tbl = table_df.get("Infra PO") if "Infra PO" in table_df.columns else None
+
+        # Try to bring HLS Main PO from df_clean into the table_df (align by SITE)
+        hls_po_tbl = table_df.get("HLS Main PO") if "HLS Main PO" in table_df.columns else None
+        if hls_po_tbl is None and "HLS Main PO" in df_clean.columns:
+            try:
+                tmp_hls = df_clean[["SITE", "HLS Main PO"]].drop_duplicates(subset=["SITE"]).copy()
+                tmp_hls["SITE"] = tmp_hls["SITE"].astype(str)
+                table_df["SITE"] = table_df["SITE"].astype(str)
+                table_df = table_df.merge(tmp_hls, on="SITE", how="left")
+                hls_po_tbl = table_df.get("HLS Main PO")
+            except Exception:
+                hls_po_tbl = None
+
+        po_sites = None
+        if "PO" in sites.columns:
+            try:
+                po_sites = sites.set_index(sites["SITE"].astype(str))["PO"]
+                po_sites = po_sites.reindex(table_df["SITE"].astype(str)).reset_index(drop=True)
+            except Exception:
+                po_sites = None
+
+        dfclean_hls = df_clean.get("HLS Main PO") if "HLS Main PO" in df_clean.columns else None
+        dfclean_infra = df_clean.get("Infra PO") if "Infra PO" in df_clean.columns else None
+        baseall_po = base_all.get("PO") if "PO" in base_all.columns else None
+
+        # Create a coalesced series with preference order
+        candidates = [existing_po, hls_po_tbl, infra_po_tbl, po_sites, dfclean_hls, dfclean_infra, baseall_po]
+        normalized = []
+        for s in candidates:
+            if s is None:
+                normalized.append(None)
+                continue
+            # if s length equals table_df length or has index matching SITE
+            try:
+                if len(s) == len(table_df):
+                    normalized.append(s.reset_index(drop=True))
+                    continue
+            except Exception:
+                pass
+            # otherwise try to align by SITE when possible
+            try:
+                s_idxed = s.copy()
+                s_idxed.index = table_df.index
+                normalized.append(s_idxed)
+            except Exception:
+                normalized.append(None)
+
+        if any(s is not None for s in normalized):
+            coalesced = _coalesce(*[s for s in normalized if s is not None])
+        else:
+            coalesced = pd.Series([""] * len(table_df), index=table_df.index)
+        table_df["PO"] = coalesced
+    except Exception:
+        if "PO" not in table_df.columns:
+            table_df["PO"] = ""
+
     cols_order = [c for c in [
         "SITE","UF","Regional","current_status","fase_label","fase_curta",
         "last_date","delay_days","year","Subcon","Type","Model","PO", "Carimbo"
@@ -1433,8 +1512,31 @@ def page_rollout():
             cols_order = [c for c in cols_order if c != "Carimbo"]
 
     # Render the Visualizacao por Status table directly (no Opcoes da tabela here)
+    disp_df = table_df.reset_index(drop=True).copy()
+    # show the PO column with a clearer label for users
+    if "PO" in disp_df.columns:
+        try:
+            # If HLS Main PO already exists (from a merge), prefer coalesced PO values
+            if "HLS Main PO" in disp_df.columns:
+                try:
+                    # ensure string type and choose non-empty value
+                    a = disp_df["HLS Main PO"].astype(str).fillna("")
+                    b = disp_df["PO"].astype(str).fillna("")
+                    disp_df["HLS Main PO"] = a.where(a.str.strip() != "", b)
+                except Exception:
+                    # fallback: overwrite with PO
+                    disp_df["HLS Main PO"] = disp_df["PO"]
+                # drop the original PO column to avoid duplicates
+                disp_df = disp_df.drop(columns=["PO"])
+            else:
+                disp_df = disp_df.rename(columns={"PO": "HLS Main PO"})
+            # reflect the renamed column in cols_order for display
+            cols_order = [("HLS Main PO" if c == "PO" else c) for c in cols_order]
+        except Exception:
+            pass
+
     st.markdown('<div class="mobile-scroll">', unsafe_allow_html=True)
-    st.dataframe(table_df.reset_index(drop=True)[cols_order], use_container_width=True, height=430)
+    st.dataframe(disp_df[cols_order], use_container_width=True, height=430)
 
 
 
