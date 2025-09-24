@@ -374,7 +374,7 @@ def reset_all():
     ):
         st.session_state.pop(k, None)
 
-    # Visualizacao / Situacao (defaults)
+    # Visualizacao / Status (defaults)
     st.session_state["viz_type"] = "Barras"
     st.session_state["escopo"] = "Ambos"
     st.session_state["sit_radio"] = "Ambos"
@@ -980,32 +980,34 @@ def page_rollout():
     for _k in ("f_uf", "f_reg", "f_subcon", "f_type", "f_model", "f_po", "f_year", "f_carimbo"):
         st.session_state.setdefault(_k, [])
 
-    # ========== 4) Tipo de grafico e Escopo ==========
-    col_viz, col_sit, col_reset = st.columns([1, 1, 0.25])
-    viz_type = col_viz.radio(
-        "Visualizacao",
-        ["Barras", "Pizza"],
-        horizontal=True,
-        index=0 if st.session_state.get("viz_type", "Barras") == "Barras" else 1,
-        key="viz_type_radio",
-    )
-    st.session_state["viz_type"] = viz_type
-
-    sit_opts = ["Concluidos", "Faltando"] + (["Ambos"] if viz_type == "Barras" else [])
-    default_sit = st.session_state.get("escopo", "Ambos")
-    if default_sit not in sit_opts:
-        default_sit = "Concluidos" if viz_type == "Pizza" else "Ambos"
-    Situacao = col_sit.radio("Situacao", sit_opts, horizontal=True, index=sit_opts.index(default_sit), key="sit_radio")
-    st.session_state["escopo"] = Situacao
-
-    if col_reset.button("Resetar", use_container_width=True, key="btn_reset_all"):
-        request_reset()
+    # (Widgets Visualizacao / Status / Reset moved into the Filtros expander below)
 
 
 
     # ========== 5) e 6) Filtros ==========
     with st.expander("Filtros", expanded=True):
-        # Layout superior: status + pesquisa
+        # Topo do expander: Visualizacao, Status e Reset
+        col_viz, col_sit, col_reset = st.columns([1, 1, 0.25])
+        viz_type = col_viz.radio(
+            "Visualizacao",
+            ["Barras", "Pizza"],
+            horizontal=True,
+            index=0 if st.session_state.get("viz_type", "Barras") == "Barras" else 1,
+            key="viz_type_radio",
+        )
+        st.session_state["viz_type"] = viz_type
+
+        sit_opts = ["Concluidos", "Faltando"] + (["Ambos"] if viz_type == "Barras" else [])
+        default_sit = st.session_state.get("escopo", "Ambos")
+        if default_sit not in sit_opts:
+            default_sit = "Concluidos" if viz_type == "Pizza" else "Ambos"
+        Status = col_sit.radio("Status", sit_opts, horizontal=True, index=sit_opts.index(default_sit), key="sit_radio")
+        st.session_state["escopo"] = Status
+
+        if col_reset.button("Resetar", use_container_width=True, key="btn_reset_all"):
+            request_reset()
+
+        # Layout superior: status + pesquisa (original inputs come below)
         top1, top2 = st.columns([1.1, 1.9])
 
         # Filtro de status
@@ -1293,7 +1295,7 @@ def page_rollout():
         st.info("Nenhum site restante com os filtros atuais.")
         fig = None
     elif viz_type == "Barras":
-        if Situacao == "Ambos":
+        if Status == "Ambos":
             long = bars.melt(
                 id_vars=["fase_curta"],
                 value_vars=["Concluidos", "Faltando"],
@@ -1301,7 +1303,7 @@ def page_rollout():
                 value_name="valor",
             )
         else:
-            keep = Situacao
+            keep = Status
             long = bars.rename(columns={keep: "valor"})[["fase_curta", "valor"]].assign(tipo=keep)
         max_total = float(bars["total"].max()) if not bars.empty else 0.0
         pad_total = max_total * 0.1
@@ -1316,7 +1318,7 @@ def page_rollout():
                 color_discrete_map={"Concluidos": "#1f77b4", "Faltando": "#ff7f0e"},
                 category_orders={"tipo": ["Concluidos", "Faltando"], "fase_curta": order_short},
                 text="valor",
-                barmode="stack" if Situacao == "Ambos" else "relative",
+                barmode="stack" if Status == "Ambos" else "relative",
                 title=("Sites por status (concluidos x faltando)" + (f" | {_ts_suffix}" if _ts_suffix else "")),
             )
             fig.update_traces(texttemplate="%{text}", textposition="outside", textangle=0, textfont=dict(size=12))
@@ -1332,7 +1334,7 @@ def page_rollout():
                 color_discrete_map={"Concluidos": "#1f77b4", "Faltando": "#ff7f0e"},
                 category_orders={"tipo": ["Concluidos", "Faltando"], "fase_curta": order_short},
                 text="valor",
-                barmode="stack" if Situacao == "Ambos" else "relative",
+                barmode="stack" if Status == "Ambos" else "relative",
                 title=("Sites por status (concluidos x faltando)" + (f" | {_ts_suffix}" if _ts_suffix else "")),
             )
             fig.update_traces(texttemplate="%{text}", textangle=0)
@@ -1359,7 +1361,7 @@ def page_rollout():
     table_df["fase_curta"] = table_df.get("last_phase_short").map(_next_short)
     table_df["fase_label"] = table_df["fase_curta"].map(short2full)
 
-    # --- 2) Se um status foi escolhido, filtrar conforme Situacao ---
+    # --- 2) Se um status foi escolhido, filtrar conforme Status ---
     if not _is_all_label(st.session_state.sel_phase_full):
         chosen_full = st.session_state.sel_phase_full.split(" (")[0].strip()
         chosen_short = full2short.get(chosen_full)
@@ -1381,7 +1383,7 @@ def page_rollout():
         else:  # Ambos
             table_df = table_df[pend_mask | table_df["SITE"].astype(str).isin(concl_sites)]
 
-    # (Opcional) badge de situacao para o status selecionado
+    # (Opcional) badge de status para o status selecionado
     # if not _is_all_label(st.session_state.sel_phase_full) and chosen_short and chosen_short in wide_f.columns:
     #     table_df["sit_selected"] = table_df["SITE"].astype(str).map(
     #         lambda s: "Concluido" if s in concl_sites else ("Faltando" if s in set(table_df.loc[pend_mask, "SITE"].astype(str)) else "")
