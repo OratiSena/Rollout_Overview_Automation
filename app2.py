@@ -74,8 +74,17 @@ def _fetch_sheet(timeout: int = 30) -> Optional[pd.DataFrame]:
         return None
 
 
+def _fetch_sheet_local(file_path: str) -> Optional[pd.DataFrame]:
+    """Lê a planilha de integração local como DataFrame."""
+    try:
+        return pd.read_excel(file_path)
+    except Exception as exc:
+        st.error(f"Falha ao ler a planilha local: {exc}")
+        return None
+
+
 def page_integracao() -> None:
-    """Renderiza a pagina principal da automacao de Integracao."""
+    """Renderiza a página principal da automação de Integração."""
     st.markdown(
         """
         <h1 style='margin: 6px 0 12px 0; font-size: 36px;'>Integração</h1>
@@ -85,12 +94,22 @@ def page_integracao() -> None:
         """,
         unsafe_allow_html=True,
     )
-    st.caption("Fonte: Google Sheets (CONTROLE_CLARO_RAN_INTEGRAÇÃO)")
+    st.caption("Fonte: Planilha local ou Google Sheets")
 
-    with st.spinner("Carregando planilha online..."):
-        df = _fetch_sheet()
+    with st.spinner("Carregando planilha..."):
+        df = None
+        if os.getenv("LOCAL_TEST", "false").lower() == "true":
+            # Leitura local para testes
+            df = _fetch_sheet_local("C:\\Users\\Vitor Sena\\Desktop\\Automacoes\\Rollout_sites\\CONTROLE_CLARO_RAN_INTEGRAÇÃO.xlsx")
+        else:
+            # Tentar leitura online
+            df = _fetch_sheet()
+            if df is None:
+                # Fallback para leitura local caso a URL não esteja configurada
+                df = _fetch_sheet_local("C:\\Users\\Vitor Sena\\Desktop\\Automacoes\\Rollout_sites\\CONTROLE_CLARO_RAN_INTEGRAÇÃO.xlsx")
 
     if df is None:
+        st.error("Falha ao carregar a planilha. Verifique se o arquivo local ou a URL estão configurados corretamente.")
         st.stop()
 
     try:
@@ -109,9 +128,13 @@ def page_integracao() -> None:
     # Filter out rows with empty 'Site Name'
     df = df[df["Site Name"].notna()]
 
-    # Update the message to count sites instead of rows
+    # Filtrar apenas sites com valores válidos em 'General Status'
+    valid_general_status = {"on going", "finished"}
+    df = df[df["General Status"].str.lower().isin(valid_general_status)]
+
+    # Atualizar a mensagem para contar apenas os sites válidos
     site_count = df["Site Name"].nunique() if "Site Name" in df.columns else 0
-    st.success(f"Planilha carregada com {site_count:,} sites identificados.")
+    st.success(f"Planilha carregada com {site_count:,} sites válidos identificados.")
 
     # Filtros na página principal
     st.markdown(
@@ -138,14 +161,14 @@ def page_integracao() -> None:
     # Alternar entre gráficos
     graph_option = st.radio(
         "Escolha o gráfico:",
-        options=["Status por Tecnologia", "General Status"],
+        options=["Integração Concluído x Faltando", "General Status"],
         index=0
     )
 
-    if graph_option == "Status por Tecnologia":
-        # Gráfico de Status por Tecnologia com 9 colunas específicas
+    if graph_option == "Integração Concluído x Faltando":
+        # Gráfico de Integração Concluído x Faltando
         integration_columns = [
-            "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 4G", "OT 2G"
+            "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 4G", "OT 2G", "OT Status"
         ]
 
         status_counts = pd.concat([
@@ -153,24 +176,24 @@ def page_integracao() -> None:
             for col in integration_columns if col in df.columns
         ])
 
-        # Map raw status values into three groups: Concluido, Faltando, NOK
+        # Map raw status values into three groups: Concluido, Faltando
         def _map_to_group(s):
             if pd.isna(s):
-                return "NOK"
+                return None  # Ignorar valores nulos
             v = str(s).strip().lower()
             # Concluido
-            if v in {"finished", "waiting approval", "waiting", "aguardando aprovação", "finished ", "finished"}:
+            if v in {"finished", "waiting approval", "waiting", "aguardando aprovação"}:
                 return "Concluido"
             # Faltando
-            if v in {"pending", "kpi rejected", "pendência", "pendência kpi", "pendencia", "pendencia kpi"}:
+            if v in {"pending", "kpi rejected", "pendência", "pendência kpi", "upload to iw"}:
                 return "Faltando"
-            # NOK (not ok)
-            if v in {"upload to iw", "unknown", "unknow", "upload to iw ", "upload to iw"}:
-                return "NOK"
-            # default: treat as NOK to surface problems
-            return "NOK"
+            # Unknown ou outros valores não devem ser contados
+            return None
 
         status_counts["Status"] = status_counts["Status"].map(_map_to_group)
+
+        # Excluir valores não mapeados (None)
+        status_counts = status_counts[status_counts["Status"].notna()]
 
         # Aggregate counts after mapping
         status_counts = (
@@ -185,11 +208,10 @@ def page_integracao() -> None:
             text="Count",
             title="Resumo do Status por Categoria",
             labels={"Type": "Categoria", "Count": "Quantidade", "Status": "Status"},
-            category_orders={"Status": ["Concluido", "Faltando", "NOK"]},
+            category_orders={"Status": ["Concluido", "Faltando"]},
             color_discrete_map={
                 "Concluido": "#1f77b4",  # Azul similar ao rollout
                 "Faltando": "#ff7f0e",   # Laranja similar ao rollout
-                "NOK": "#d62728",        # Vermelho
             }
         )
         fig.update_traces(textposition="outside")
@@ -216,8 +238,13 @@ def page_integracao() -> None:
         fig.update_traces(textposition="outside")
         st.plotly_chart(fig, use_container_width=True)
 
-    # Tabela de resumo
-    status_summary = df[["Site Name", "Integration date", "MOS", "General Status", "4G Status", "2G Status"]]
+    # Tabela de resumo: selecionar apenas colunas existentes
+    desired_columns = [
+        "Site Name", "Integration date", "MOS", "General Status", "4G Status", "2G Status",
+        "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"
+    ]
+    existing_cols = [c for c in desired_columns if c in df.columns]
+    status_summary = df[existing_cols]
     st.dataframe(status_summary, use_container_width=True)
 
     # Tabela Fiel

@@ -15,7 +15,7 @@ def process_integration_data(df: pd.DataFrame) -> pd.DataFrame:
     # Garantir que as colunas necessárias existam
     required_columns = [
         "Site Name", "Integration date", "MOS", "General Status", "Comment", "4G Status", "2G Status",
-        "Alarm test", "Calling test", "IR", "SSV", "ARQ Number", "OT 4G", "OT 2G", "Pre-comissioned",
+        "Alarm test", "Calling test", "IR", "SSV", "ARQ Number", "OT 4G", "OT 2G", "OT Status", "Pre-comissioned",
         "Region", "Related BSC", "BSC ID", "BSC SCTP", "MEIO TX", "MEID", "2G BTS ID", "LTE eNodeB ID",
         "OAM IP", "OAM IP netmask", "OAM Gateway", "VLAN", "GSM IP", "GSM IP netmask", "GSM IP Gateway",
         "LTE IP", "LTE IP netmask", "LTE IP Gateway"
@@ -31,8 +31,10 @@ def process_integration_data(df: pd.DataFrame) -> pd.DataFrame:
     df["Integration date"] = pd.to_datetime(df["Integration date"], errors="coerce")
 
     # Adicionar colunas calculadas, se necessário
-    df["4G Status"] = df["4G Status"].fillna("Unknown")
-    df["2G Status"] = df["2G Status"].fillna("Unknown")
+    status_columns = ["4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 4G", "OT 2G", "OT Status"]
+    for c in status_columns:
+        if c in df.columns:
+            df[c] = df[c].fillna("Unknown")
 
     return df
 
