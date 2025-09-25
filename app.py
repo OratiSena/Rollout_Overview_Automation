@@ -260,6 +260,21 @@ with st.sidebar:
         background: #6c6f75 !important;
         border-color: #6c6f75 !important;
     }
+    /* Same visual lock for the Rollout tree first node (Filtros) */
+    .zte-tree-wrap .ant-tree .ant-tree-treenode:first-child,
+    .zte-tree-wrap .ant-tree .ant-tree-treenode:first-child * {
+        pointer-events: none !important;
+    }
+    .zte-tree-wrap .ant-tree .ant-tree-treenode:first-child .ant-tree-node-content-wrapper {
+        color: #bfc3c6 !important;
+        opacity: 0.95;
+        cursor: default !important;
+    }
+    .zte-tree-wrap .ant-tree .ant-tree-treenode:first-child .ant-tree-checkbox-checked .ant-tree-checkbox-inner,
+    .zte-tree-wrap .ant-tree .ant-tree-treenode:first-child .ant-tree-checkbox-inner {
+        background: #6c6f75 !important;
+        border-color: #6c6f75 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -267,15 +282,30 @@ with st.sidebar:
     if st.session_state.route == "rollout":
         st.markdown("<div class='zte-tree-wrap'>", unsafe_allow_html=True)
 
+        # Prepend a fixed 'Filtros' node (non-interactive) to visually group
+        # the Rollout tree and keep filters always visible. We will pre-seed the
+        # widget value so it renders checked and enforce it after render as a
+        # server-side fallback.
         items = [
+            sac.TreeItem("Filtros"),
             sac.TreeItem("Visualização por Status"),
-            sac.TreeItem("Análise por Site (lead time)"),
+            sac.TreeItem("Lead Time"),
             sac.TreeItem("Tabela Fiel/Real"),
         ]
-        default_idx = []
-        if st.session_state.get("show_status", True): default_idx.append(0)
-        if st.session_state.get("show_lead", True):   default_idx.append(1)
-        if st.session_state.get("show_fiel", True):   default_idx.append(2)
+        # default indices (the first item 'Filtros' is always checked)
+        default_idx = [0]
+        if st.session_state.get("show_status", True): default_idx.append(1)
+        if st.session_state.get("show_lead", True):   default_idx.append(2)
+        if st.session_state.get("show_fiel", True):   default_idx.append(3)
+
+        # Pre-seed the widget value so 'Filtros' renders checked on load.
+        default_labels = ["Filtros"]
+        if st.session_state.get("show_status", True): default_labels.append("Visualização por Status")
+        if st.session_state.get("show_lead", True):   default_labels.append("Análise por Site (lead time)")
+        if st.session_state.get("show_fiel", True):   default_labels.append("Tabela Fiel/Real")
+        cur_val = st.session_state.get("rollout_tree")
+        if not cur_val or "Filtros" not in (cur_val if isinstance(cur_val, (list, tuple)) else [cur_val]):
+            st.session_state["rollout_tree"] = default_labels
 
         selected = sac.tree(
             items=items,
@@ -288,6 +318,15 @@ with st.sidebar:
             key="rollout_tree",
         ) or []
         sel = set(selected)
+        # Enforce 'Filtros' presence: if missing, reset widget value and rerun.
+        if "Filtros" not in sel:
+            desired = ["Filtros"]
+            if st.session_state.get("show_status", True): desired.append("Visualização por Status")
+            if st.session_state.get("show_lead", True):   desired.append("Análise por Site (lead time)")
+            if st.session_state.get("show_fiel", True):   desired.append("Tabela Fiel/Real")
+            st.session_state["rollout_tree"] = desired
+            st.experimental_rerun()
+
         st.session_state.show_status = "Visualização por Status" in sel
         st.session_state.show_lead   = "Análise por Site (lead time)" in sel
         st.session_state.show_fiel   = "Tabela Fiel/Real" in sel
@@ -478,7 +517,7 @@ def render_lead_analysis(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
 
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     st.markdown("<h2 style='margin: 6px 0 12px 0; font-size: 24px;'>Analise por Site (lead time)</h2>", unsafe_allow_html=True)
-    with st.expander("Abrir analise por site", expanded=False):
+    with st.expander("Abrir analise por site", expanded=True):
         options = ["Analise pelos filtros aplicados", "Media (todos os sites)", "Pesquisar Site especifico"]
         current = st.session_state.get("site_analysis_mode")
         if current not in options:
@@ -775,140 +814,141 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
 
     # ---- Opcoes da tabela ----
     st.markdown("<h3 style='margin: 18px 0 6px;'>Tabela Fiel</h3>", unsafe_allow_html=True)
-    with st.expander("Opcoes da tabela", expanded=False):
-        l4_all = [x for x in list(dict.fromkeys(df_all.columns.get_level_values(0))) if _norm(x)]
-        show_blks = st.multiselect(
-            "Blocos (linha 4 do Excel)", options=l4_all, default=l4_all,
-            help="Selecione quais blocos/status deseja visualizar."
-        )
-        dens = st.radio(
-            "Densidade por bloco",
-            ["AC", "AC + Plan", "Completo"],
-            horizontal=True,
-            help="AC = so 'Actual'; AC+Plan = 'Plan' + 'Actual'; Completo = todas as colunas."
-        )
+    # Outer expander: Tabela Fiel (closed by default per request)
+    with st.expander("Tabela Fiel", expanded=False):
+        with st.expander("Opcoes da tabela", expanded=False):
+            l4_all = [x for x in list(dict.fromkeys(df_all.columns.get_level_values(0))) if _norm(x)]
+            show_blks = st.multiselect(
+                "Blocos (linha 4 do Excel)", options=l4_all, default=l4_all,
+                help="Selecione quais blocos/status deseja visualizar."
+            )
+            dens = st.radio(
+                "Densidade por bloco",
+                ["AC", "AC + Plan", "Completo"],
+                horizontal=True,
+                help="AC = so 'Actual'; AC+Plan = 'Plan' + 'Actual'; Completo = todas as colunas."
+            )
 
-    # ---- Selecao de colunas (blocos + densidade) ----
-    l4_lv = df_all.columns.get_level_values(0).astype(str)
-    l5_lv = df_all.columns.get_level_values(1).astype(str)
+        # ---- Selecao de colunas (blocos + densidade) ----
+        l4_lv = df_all.columns.get_level_values(0).astype(str)
+        l5_lv = df_all.columns.get_level_values(1).astype(str)
 
-    essentials_lvl7 = {
-        "HOST NAME", "HOSTNAME", "SITE NAME", "SITENAME", "STATE", "UF",
-        "CURRENT STATUS", "GROUP", "SUBCON", "TYPE", "QTY", "MODEL",
-        "SOW", "SOW TYPE", "SOW STATUS", "RECORD DATE",
-    }
-    keep_cols = [c for c in df_all.columns if _up(c[-1]) in essentials_lvl7]
+        essentials_lvl7 = {
+            "HOST NAME", "HOSTNAME", "SITE NAME", "SITENAME", "STATE", "UF",
+            "CURRENT STATUS", "GROUP", "SUBCON", "TYPE", "QTY", "MODEL",
+            "SOW", "SOW TYPE", "SOW STATUS", "RECORD DATE",
+        }
+        keep_cols = [c for c in df_all.columns if _up(c[-1]) in essentials_lvl7]
 
-    def _mask_dens():
-        u = l5_lv.str.upper()
-        if dens == "AC":
-            return u.isin(["ACTUAL", "AC", "ACT"])
-        if dens == "AC + Plan":
-            return u.isin(["PLAN", "REPLAN", "RE-PLAN", "RPLAN", "ACTUAL", "AC", "ACT"])
-        return pd.Series([True] * len(u))  # Completo
+        def _mask_dens():
+            u = l5_lv.str.upper()
+            if dens == "AC":
+                return u.isin(["ACTUAL", "AC", "ACT"])
+            if dens == "AC + Plan":
+                return u.isin(["PLAN", "REPLAN", "RE-PLAN", "RPLAN", "ACTUAL", "AC", "ACT"])
+            return pd.Series([True] * len(u))  # Completo
 
-    mask_blk = l4_lv.isin(show_blks) if show_blks else pd.Series([True] * len(l4_lv))
-    mask_den = _mask_dens()
-    chosen_cols = df_all.columns[mask_blk & mask_den]
+        mask_blk = l4_lv.isin(show_blks) if show_blks else pd.Series([True] * len(l4_lv))
+        mask_den = _mask_dens()
+        chosen_cols = df_all.columns[mask_blk & mask_den]
 
-    # Ordem: essenciais + escolhidos (sem duplicar)
-    seen, ordered = set(), []
-    for c in list(keep_cols) + list(chosen_cols):
-        if c not in seen:
-            ordered.append(c)
-            seen.add(c)
-    df_sel = df_all.loc[:, ordered]
+        # Ordem: essenciais + escolhidos (sem duplicar)
+        seen, ordered = set(), []
+        for c in list(keep_cols) + list(chosen_cols):
+            if c not in seen:
+                ordered.append(c)
+                seen.add(c)
+        df_sel = df_all.loc[:, ordered]
 
-    # ---- Datas sem horario (NUNCA em 'Qty') ----
-    def _looks_date_col(col_tuple):
-        name_l7 = _up(col_tuple[-1])
-        if name_l7 == "QTY":
-            return False
-        return (
-            name_l7.endswith("-AC") or
-            name_l7.endswith("-PL") or
-            name_l7.endswith("-RPL") or
-            name_l7 in {"RECORD DATE"}
-        )
+        # ---- Datas sem horario (NUNCA em 'Qty') ----
+        def _looks_date_col(col_tuple):
+            name_l7 = _up(col_tuple[-1])
+            if name_l7 == "QTY":
+                return False
+            return (
+                name_l7.endswith("-AC") or
+                name_l7.endswith("-PL") or
+                name_l7.endswith("-RPL") or
+                name_l7 in {"RECORD DATE"}
+            )
 
-    for col in df_sel.columns:
-        if _looks_date_col(col):
-            ser = _to_date_safe(df_sel[col])
-            if ser.notna().any():
-                # Mostra data formatada quando parse funcionou; caso contrario mostra vazio
-                df_sel[col] = ser.dt.strftime("%d-%b-%y").where(ser.notna(), "")
+        for col in df_sel.columns:
+            if _looks_date_col(col):
+                ser = _to_date_safe(df_sel[col])
+                if ser.notna().any():
+                    # Mostra data formatada quando parse funcionou; caso contrario mostra vazio
+                    df_sel[col] = ser.dt.strftime("%d-%b-%y").where(ser.notna(), "")
 
 
-    # ---- COMPACTACAO para 2 niveis de exibicao ----
-    lvl0, lvl1 = [], []
-    for (L4, L5, L6, L7) in df_sel.columns:
-        top = _norm(L4)  # sempre o status aqui
-        bot_parts = []
-        if _norm(L5):
-            bot_parts.append(L5)
-        if _norm(L6):
-            bot_parts.append(f"{L6}")
-        if _norm(L7):
-            bot_parts.append(f" {L7}")
-        bot = " / ".join(bot_parts) if bot_parts else (_norm(L7) or _norm(L4))
-        lvl0.append(top)
-        lvl1.append(bot)
+        # ---- COMPACTACAO para 2 niveis de exibicao ----
+        lvl0, lvl1 = [], []
+        for (L4, L5, L6, L7) in df_sel.columns:
+            top = _norm(L4)  # sempre o status aqui
+            bot_parts = []
+            if _norm(L5):
+                bot_parts.append(L5)
+            if _norm(L6):
+                bot_parts.append(f"{L6}")
+            if _norm(L7):
+                bot_parts.append(f" {L7}")
+            bot = " / ".join(bot_parts) if bot_parts else (_norm(L7) or _norm(L4))
+            lvl0.append(top)
+            lvl1.append(bot)
 
-    cols2 = pd.MultiIndex.from_arrays([lvl0, lvl1])
-    df_view = df_sel.copy()
-    df_view.columns = cols2
+        cols2 = pd.MultiIndex.from_arrays([lvl0, lvl1])
+        df_view = df_sel.copy()
+        df_view.columns = cols2
 
-    # ---- Largura automatica por tamanho de cabecalho ----
-    colcfg = {}
-    def _auto_w(s: str):
-        # largura minima 120, maxima 360, proporcional ao texto
-        n = max(len(s), 8)
-        return max(120, min(360, int(n * 7.2)))
+        # ---- Largura automatica por tamanho de cabecalho ----
+        colcfg = {}
+        def _auto_w(s: str):
+            # largura minima 120, maxima 360, proporcional ao texto
+            n = max(len(s), 8)
+            return max(120, min(360, int(n * 7.2)))
 
-    # default: auto em todas
-    for col in df_view.columns:
-        header_len = len(str(col[0])) + len(str(col[1]))
-        try:
-            colcfg[col] = st.column_config.Column(width=_auto_w("".join([str(col[0]), str(col[1])])))
-        except Exception:
-            pass
-
-    # especificos menores
-    for name, width in [("Host Name", 160), ("Site Name", 160), ("State", 90)]:
+        # default: auto em todas
         for col in df_view.columns:
-            if _norm(col[1]).lower().endswith(name.lower()) or _norm(col[1]).lower() == name.lower():
-                try:
-                    colcfg[col] = st.column_config.Column(width=width)
-                except Exception:
-                    pass
+            header_len = len(str(col[0])) + len(str(col[1]))
+            try:
+                colcfg[col] = st.column_config.Column(width=_auto_w("".join([str(col[0]), str(col[1])])))
+            except Exception:
+                pass
 
-    # ---- Render ----
-    st.markdown('<div class="mobile-scroll">', unsafe_allow_html=True)
-    try:
-        st.dataframe(df_view, use_container_width=True, height=520, column_config=colcfg)
-    except Exception:
-        st.dataframe(df_view, use_container_width=True, height=520)
+        # especificos menores
+        for name, width in [("Host Name", 160), ("Site Name", 160), ("State", 90)]:
+            for col in df_view.columns:
+                if _norm(col[1]).lower().endswith(name.lower()) or _norm(col[1]).lower() == name.lower():
+                    try:
+                        colcfg[col] = st.column_config.Column(width=width)
+                    except Exception:
+                        pass
+        # ---- Render ----
+        st.markdown('<div class="mobile-scroll">', unsafe_allow_html=True)
+        try:
+            st.dataframe(df_view, use_container_width=True, height=520, column_config=colcfg)
+        except Exception:
+            st.dataframe(df_view, use_container_width=True, height=520)
 
 
-    # ---- Download (achatado) ----
-    df_xlsx = df_sel.copy()
-    flat_cols = []
-    for col in df_xlsx.columns:
-        parts = [p for p in col if _norm(p)]
-        flat_cols.append(" / ".join(parts) if parts else "")
-    df_xlsx.columns = flat_cols
+        # ---- Download (achatado) ----
+        df_xlsx = df_sel.copy()
+        flat_cols = []
+        for col in df_xlsx.columns:
+            parts = [p for p in col if _norm(p)]
+            flat_cols.append(" / ".join(parts) if parts else "")
+        df_xlsx.columns = flat_cols
 
-    bio = io.BytesIO()
-    with pd.ExcelWriter(bio, engine="openpyxl") as writer:
-        df_xlsx.to_excel(writer, index=False, sheet_name="FIEL_REAL")
-    bio.seek(0)
-    st.download_button(
-        "Baixar Fiel/Real (recorte).xlsx",
-        data=bio.getvalue(),
-        file_name="FIEL_REAL_filtrado.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="dl_fiel_real_streamlit",
-    )
+        bio = io.BytesIO()
+        with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+            df_xlsx.to_excel(writer, index=False, sheet_name="FIEL_REAL")
+        bio.seek(0)
+        st.download_button(
+            "Baixar Fiel/Real (recorte).xlsx",
+            data=bio.getvalue(),
+            file_name="FIEL_REAL_filtrado.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="dl_fiel_real_streamlit",
+        )
 
 
 
