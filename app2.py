@@ -118,35 +118,142 @@ def page_integracao() -> None:
         st.error(f"Erro ao processar os dados: {e}")
         st.stop()
 
-    # Remover horários: converter qualquer coluna datetime para date (aplica às tabelas)
-    for col in df.select_dtypes(include=["datetime64[ns]", "datetime64"]).columns:
-        df[col] = df[col].dt.date
+    # OBS: 'Integration date' e 'MOS' podem não existir mais na planilha online;
+    # não forçamos conversão aqui — os filtros e tabelas lidam com colunas opcionais.
 
     # Ajustando as cores dos gráficos e rótulo do eixo x
     # Filtrar linhas com 'Site Name' vazio
     df = df[df["Site Name"].notna()]
 
-    # Filtrar apenas sites com valores válidos em 'General Status'
-    valid_general_status = {"on going", "finished"}
-    df = df[df["General Status"].str.lower().isin(valid_general_status)]
-
-    # Atualizar a mensagem para contar apenas os sites válidos
+    # Mostrar quantos sites a planilha tem (antes de aplicar filtros)
     site_count = df["Site Name"].nunique() if "Site Name" in df.columns else 0
-    st.success(f"Planilha carregada com {site_count:,} sites válidos identificados.")
+    # Criar o placeholder antes do cabeçalho para que tanto a mensagem inicial
+    # quanto a atualizada (após filtros) apareçam acima do título 'Filtros'
+    msg_ph = st.empty()
+    msg_ph.success(f"Planilha carregada com {site_count:,} sites válidos identificados.")
 
-    # Filtros na página principal
+    # Cabeçalho de filtros — os widgets reais ficam dentro do expander abaixo
     st.markdown(
         """
         <h2 style='margin: 12px 0; font-size: 24px;'>Filtros</h2>
         """,
         unsafe_allow_html=True,
     )
-    status_filter = st.multiselect(
-        "Filtrar por Status 4G:", options=df["4G Status"].unique(), default=[]
-    )
 
-    if status_filter:
-        df = df[df["4G Status"].isin(status_filter)]
+    # --- FILTROS (agora em expander, similar ao rollout) ---
+    with st.expander("Filtros", expanded=False):
+        # Preparar valores e colunas utilizáveis
+        search_columns = [c for c in ["Site Name", "General Status", "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "Region", "Comment", "ARQ Number", "OT Status", "OT 2G", "OT 4G"] if c in df.columns]
+        status_columns = [c for c in ["4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV"] if c in df.columns]
+        ot_columns = [c for c in ["OT 2G", "OT 4G"] if c in df.columns]
+
+        # Top row: General Status first, then search, then region, then ARQ
+        r1c1, r1c2, r1c3, r1c4 = st.columns([2,3,2,2])
+        with r1c1:
+            gen_opts = ["Finished", "On going", "Unknown"]
+            sel_general = st.multiselect("General Status:", options=gen_opts, default=[], help="Filtra por General Status", key="f_gen_status")
+        with r1c2:
+            txt_search = st.text_input("Pesquisar (Site, status, Region, Comment, ARQ):", key="f_txt_search")
+        with r1c3:
+            region_opts = sorted(df["Region"].dropna().unique().tolist()) if "Region" in df.columns else []
+            sel_region = st.multiselect("Region:", options=region_opts, default=[], key="f_region")
+        with r1c4:
+            arq_opts = sorted(df["ARQ Number"].dropna().unique().tolist()) if "ARQ Number" in df.columns else []
+            sel_arq = st.multiselect("ARQ Number:", options=arq_opts, default=[], key="f_arq")
+
+        # (Integration date / MOS removed from filters - sheet no longer provides them)
+        int_start = int_end = None
+        mos_start = mos_end = None
+
+        # Third area: mapped status filters arranged side-by-side (3 per row)
+        if status_columns:
+            cols_per_row = 3
+            rows = (len(status_columns) + cols_per_row - 1) // cols_per_row
+            sel_status_map = {}
+            idx = 0
+            for r in range(rows):
+                cols = st.columns(cols_per_row)
+                for c in cols:
+                    if idx >= len(status_columns):
+                        break
+                    colname = status_columns[idx]
+                    sel = c.multiselect(f"{colname} (map):", options=["Concluido", "Faltando"], default=[], key=f"map_{colname}")
+                    sel_status_map[colname] = sel
+                    idx += 1
+
+        # OT filters on a single row
+        if ot_columns:
+            ot_cols = st.columns(len(ot_columns))
+            sel_ot = {}
+            for i, col in enumerate(ot_columns):
+                opts = sorted(df[col].dropna().unique().tolist())
+                default_opts = [v for v in ["Pending", "KPI Rejected", "Finished", "Waiting Approval"] if v in opts]
+                sel = ot_cols[i].multiselect(f"{col}:", options=opts, default=default_opts)
+                sel_ot[col] = sel
+
+        # Show a small divider
+        st.markdown("---")
+
+    # Aplicar os filtros sobre uma cópia (widgets existiram dentro do expander)
+    df_filtered = df.copy()
+
+    # Texto livre
+    if txt_search:
+        txt = txt_search.strip().lower()
+        mask = pd.Series(False, index=df_filtered.index)
+        for c in search_columns:
+            mask = mask | df_filtered[c].astype(str).str.lower().str.contains(txt, na=False)
+        df_filtered = df_filtered[mask]
+
+    # Region
+    if sel_region:
+        df_filtered = df_filtered[df_filtered["Region"].isin(sel_region)]
+
+    # Integration date / MOS filtering removed (columns may no longer exist in sheet)
+
+    # General Status
+    if sel_general:
+        def general_match(v):
+            if pd.isna(v):
+                return "Unknown"
+            s = str(v).strip()
+            if s.lower() == "finished":
+                return "Finished"
+            if s.lower() in {"on going", "ongoing"}:
+                return "On going"
+            return "Unknown"
+        df_filtered = df_filtered[df_filtered["General Status"].apply(general_match).isin(sel_general)]
+
+    # ARQ
+    if sel_arq:
+        df_filtered = df_filtered[df_filtered["ARQ Number"].isin(sel_arq)]
+
+    # Status map filters (Concluido/Faltando) for each status column
+    def map_to_two_local(s):
+        if pd.isna(s):
+            return None
+        v = str(s).strip().lower()
+        if v == "finished":
+            return "Concluido"
+        if v in {"pending", "kpi rejected", "pendência", "pendência kpi", "upload to iw", "waiting approval", "waiting", "aguardando aprovação"}:
+            return "Faltando"
+        return None
+
+    for col, sel in sel_status_map.items() if status_columns else []:
+        if sel:
+            df_filtered = df_filtered[df_filtered[col].apply(map_to_two_local).isin(sel)]
+
+    # OT raw filters
+    for col, sel in (sel_ot.items() if ot_columns else []):
+        if sel:
+            df_filtered = df_filtered[df_filtered[col].isin(sel)]
+
+    # Usar df_filtered em vez de df daqui para frente (gráfico e tabelas)
+    df = df_filtered
+
+    # Atualizar a mensagem placeholder para contar apenas os sites filtrados
+    site_count = df["Site Name"].nunique() if "Site Name" in df.columns else 0
+    msg_ph.success(f"Registros mostrados: {site_count:,} sites após filtros aplicados.")
 
     # Status de Integração
     st.markdown(
@@ -215,7 +322,9 @@ def page_integracao() -> None:
                 "Faltando": "#ff7f0e",   # Laranja similar ao rollout
             }
         )
-        fig.update_traces(textposition="outside")
+        # Let Plotly decide best text position (inside/outside) and give room at the top
+        fig.update_traces(textposition="auto")
+        fig.update_layout(margin=dict(t=80), legend_title_text="Status", uniformtext_minsize=8)
         st.plotly_chart(fig, use_container_width=True)
 
     elif graph_option == "General Status":
@@ -241,7 +350,7 @@ def page_integracao() -> None:
 
     # Tabela de resumo: selecionar apenas colunas existentes
     desired_columns = [
-        "Site Name", "Integration date", "MOS", "General Status", "4G Status", "2G Status",
+        "Site Name", "General Status", "4G Status", "2G Status",
         "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"
     ]
     existing_cols = [c for c in desired_columns if c in df.columns]

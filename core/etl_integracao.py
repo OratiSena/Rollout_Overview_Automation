@@ -14,7 +14,7 @@ def process_integration_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     # Garantir que as colunas necessárias existam
     required_columns = [
-        "Site Name", "Integration date", "MOS", "General Status", "Comment", "4G Status", "2G Status",
+        "Site Name", "General Status", "Comment", "4G Status", "2G Status",
         "Alarm test", "Calling test", "IR", "SSV", "ARQ Number", "OT 4G", "OT 2G", "OT Status", "Pre-comissioned",
         "Region", "Related BSC", "BSC ID", "BSC SCTP", "MEIO TX", "MEID", "2G BTS ID", "LTE eNodeB ID",
         "OAM IP", "OAM IP netmask", "OAM Gateway", "VLAN", "GSM IP", "GSM IP netmask", "GSM IP Gateway",
@@ -27,8 +27,7 @@ def process_integration_data(df: pd.DataFrame) -> pd.DataFrame:
     # Filtrar colunas relevantes
     df = df[required_columns]
 
-    # Converter datas para datetime
-    df["Integration date"] = pd.to_datetime(df["Integration date"], errors="coerce")
+    # Nota: não forçar conversão de Integration date/MOS aqui — a página lida com campos opcionais
 
     # Adicionar colunas calculadas, se necessário
     status_columns = ["4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 4G", "OT 2G", "OT Status"]
