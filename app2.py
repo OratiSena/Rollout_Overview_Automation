@@ -133,66 +133,106 @@ def page_integracao() -> None:
     msg_ph.success(f"Planilha carregada com {site_count:,} sites válidos identificados.")
 
     # Cabeçalho de filtros — os widgets reais ficam dentro do expander abaixo
-    st.markdown(
-        """
-        <h2 style='margin: 12px 0; font-size: 24px;'>Filtros</h2>
-        """,
-        unsafe_allow_html=True,
-    )
+    if st.session_state.get("int_show_filters", True):
+        st.markdown(
+            """
+            <h2 style='margin: 12px 0; font-size: 24px;'>Filtros</h2>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    # --- FILTROS (agora em expander, similar ao rollout) ---
-    with st.expander("Filtros", expanded=False):
-        # Preparar valores e colunas utilizáveis
-        search_columns = [c for c in ["Site Name", "General Status", "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "Region", "Comment", "ARQ Number", "OT Status", "OT 2G", "OT 4G"] if c in df.columns]
-        status_columns = [c for c in ["4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV"] if c in df.columns]
-        ot_columns = [c for c in ["OT 2G", "OT 4G"] if c in df.columns]
+        # --- FILTROS (agora em expander, similar ao rollout) ---
+        with st.expander("Filtros", expanded=True):
+            # Preparar apenas as colunas que o Reset precisa (sem criar widgets ainda)
+            status_columns = [c for c in ["4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV"] if c in df.columns]
+            ot_columns = [c for c in ["OT 2G", "OT 4G"] if c in df.columns]
 
-        # Top row: General Status first, then search, then region, then ARQ
-        r1c1, r1c2, r1c3, r1c4 = st.columns([2,3,2,2])
-        with r1c1:
-            gen_opts = ["Finished", "On going", "Unknown"]
-            sel_general = st.multiselect("General Status:", options=gen_opts, default=[], help="Filtra por General Status", key="f_gen_status")
-        with r1c2:
-            txt_search = st.text_input("Pesquisar (Site, status, Region, Comment, ARQ):", key="f_txt_search")
-        with r1c3:
-            region_opts = sorted(df["Region"].dropna().unique().tolist()) if "Region" in df.columns else []
-            sel_region = st.multiselect("Region:", options=region_opts, default=[], key="f_region")
-        with r1c4:
-            arq_opts = sorted(df["ARQ Number"].dropna().unique().tolist()) if "ARQ Number" in df.columns else []
-            sel_arq = st.multiselect("ARQ Number:", options=arq_opts, default=[], key="f_arq")
+            # Escolha do gráfico no topo do expander (como antes) e Reset no canto direito
+            # Forçar layout horizontal das opções do radio via CSS local (seletor mais amplo)
+            st.markdown(
+                """
+                <style>
+                /* Force radio options inline by making labels inline-flex */
+                div[role="radiogroup"] { display: flex !important; flex-direction: row !important; gap: 10px !important; align-items: center !important; }
+                div[role="radiogroup"] label { display: inline-flex !important; align-items: center !important; margin-right: 18px !important; }
+                /* fallback: target common streamlit radio container classes */
+                .stRadio div[role="radiogroup"] { display: flex !important; }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+            # aumentar a proporcao para empurrar o botão Reset mais para a direita
+            top_cols = st.columns([8, 1])
+            with top_cols[0]:
+                graph_option = st.radio(
+                    "Escolha o gráfico:",
+                    options=["Integração Concluído x Faltando", "General Status"],
+                    index=0,
+                    key="f_graph_option",
+                )
+            with top_cols[1]:
+                if st.button("Resetar", key="f_reset_filters"):
+                    keys_to_clear = ["f_gen_status", "f_txt_search", "f_region", "f_arq", "f_graph_option"]
+                    for col in status_columns:
+                        keys_to_clear.append(f"map_{col}")
+                    for col in ot_columns:
+                        keys_to_clear.append(f"f_ot_{col}")
+                    for k in keys_to_clear:
+                        if k in st.session_state:
+                            del st.session_state[k]
+                    st.experimental_rerun()
 
-        # (Integration date / MOS removed from filters - sheet no longer provides them)
-        int_start = int_end = None
-        mos_start = mos_end = None
 
-        # Third area: mapped status filters arranged side-by-side (3 per row)
-        if status_columns:
-            cols_per_row = 3
-            rows = (len(status_columns) + cols_per_row - 1) // cols_per_row
-            sel_status_map = {}
-            idx = 0
-            for r in range(rows):
-                cols = st.columns(cols_per_row)
-                for c in cols:
-                    if idx >= len(status_columns):
-                        break
-                    colname = status_columns[idx]
-                    sel = c.multiselect(f"{colname} (map):", options=["Concluido", "Faltando"], default=[], key=f"map_{colname}")
-                    sel_status_map[colname] = sel
-                    idx += 1
+            # (Integration date / MOS removed from filters - sheet no longer provides them)
+            int_start = int_end = None
+            mos_start = mos_end = None
 
-        # OT filters on a single row
-        if ot_columns:
-            ot_cols = st.columns(len(ot_columns))
-            sel_ot = {}
-            for i, col in enumerate(ot_columns):
-                opts = sorted(df[col].dropna().unique().tolist())
-                default_opts = [v for v in ["Pending", "KPI Rejected", "Finished", "Waiting Approval"] if v in opts]
-                sel = ot_cols[i].multiselect(f"{col}:", options=opts, default=default_opts)
-                sel_ot[col] = sel
+            # Preparar valores e colunas utilizáveis (após os controles do topo)
+            search_columns = [c for c in ["Site Name", "General Status", "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "Region", "Comment", "ARQ Number", "OT Status", "OT 2G", "OT 4G"] if c in df.columns]
 
-        # Show a small divider
-        st.markdown("---")
+            # Top row: General Status first, then search, then region, then ARQ
+            r1c1, r1c2, r1c3, r1c4 = st.columns([2,3,2,2])
+            with r1c1:
+                gen_opts = ["Finished", "On going", "Unknown"]
+                sel_general = st.multiselect("General Status:", options=gen_opts, default=[], help="Filtra por General Status", key="f_gen_status")
+            with r1c2:
+                txt_search = st.text_input("Pesquisar (Site, status, Region, Comment, ARQ):", key="f_txt_search")
+            with r1c3:
+                region_opts = sorted(df["Region"].dropna().unique().tolist()) if "Region" in df.columns else []
+                sel_region = st.multiselect("Region:", options=region_opts, default=[], key="f_region")
+            with r1c4:
+                arq_opts = sorted(df["ARQ Number"].dropna().unique().tolist()) if "ARQ Number" in df.columns else []
+                sel_arq = st.multiselect("ARQ Number:", options=arq_opts, default=[], key="f_arq")
+
+            # Third area: mapped status filters arranged side-by-side (3 per row)
+            if status_columns:
+                cols_per_row = 3
+                rows = (len(status_columns) + cols_per_row - 1) // cols_per_row
+                sel_status_map = {}
+                idx = 0
+                for r in range(rows):
+                    cols = st.columns(cols_per_row)
+                    for c in cols:
+                        if idx >= len(status_columns):
+                            break
+                        colname = status_columns[idx]
+                        sel = c.multiselect(f"{colname} (map):", options=["Concluido", "Faltando"], default=[], key=f"map_{colname}")
+                        sel_status_map[colname] = sel
+                        idx += 1
+
+            # OT filters on a single row
+            if ot_columns:
+                ot_cols = st.columns(len(ot_columns))
+                sel_ot = {}
+                for i, col in enumerate(ot_columns):
+                    opts = sorted(df[col].dropna().unique().tolist())
+                    default_opts = [v for v in ["Pending", "KPI Rejected", "Finished", "Waiting Approval"] if v in opts]
+                    key_name = f"f_ot_{col}"
+                    sel = ot_cols[i].multiselect(f"{col}:", options=opts, default=default_opts, key=key_name)
+                    sel_ot[col] = sel
+
+            # Show a small divider
+            st.markdown("---")
 
     # Aplicar os filtros sobre uma cópia (widgets existiram dentro do expander)
     df_filtered = df.copy()
@@ -256,169 +296,171 @@ def page_integracao() -> None:
     msg_ph.success(f"Registros mostrados: {site_count:,} sites após filtros aplicados.")
 
     # Status de Integração
-    st.markdown(
-        """
-        <h2 style='margin: 12px 0; font-size: 24px;'>Status de Integração</h2>
-        """,
-        unsafe_allow_html=True,
-    )
+    if st.session_state.get("int_show_status", True):
+        st.markdown(
+            """
+            <h2 style='margin: 12px 0; font-size: 24px;'>Status de Integração</h2>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    # Alternar entre gráficos
-    graph_option = st.radio(
-        "Escolha o gráfico:",
-        options=["Integração Concluído x Faltando", "General Status"],
-        index=0
-    )
+        # Utiliza a escolha feita nos filtros (se presente)
+        graph_option = st.session_state.get("f_graph_option", "Integração Concluído x Faltando")
 
-    if graph_option == "Integração Concluído x Faltando":
-        # Gráfico de Integração Concluído x Faltando
-        integration_columns = [
-            "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"
+        if graph_option == "Integração Concluído x Faltando":
+            # Gráfico de Integração Concluído x Faltando
+            integration_columns = [
+                "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"
+            ]
+
+            status_counts = pd.concat([
+                df[col].value_counts().rename_axis("Status").reset_index(name="Count").assign(Type=col)
+                for col in integration_columns if col in df.columns
+            ])
+
+            # Map raw status values into three groups: Concluido, Faltando
+            def _map_to_group(s):
+                if pd.isna(s):
+                    return None  # Ignorar valores nulos
+                v = str(s).strip().lower()
+                # Concluido
+                if v in {"finished"}:
+                    return "Concluido"
+                # Faltando
+                if v in {"pending", "kpi rejected", "pendência", "pendência kpi", "upload to iw", "waiting approval", "waiting", "aguardando aprovação"}:
+                    return "Faltando"
+                # Unknown ou outros valores não devem ser contados
+                return None
+
+            status_counts["Status"] = status_counts["Status"].map(_map_to_group)
+
+            # Excluir valores não mapeados (None)
+            status_counts = status_counts[status_counts["Status"].notna()]
+
+            # Aggregate counts after mapping
+            status_counts = (
+                status_counts.groupby(["Type", "Status"])["Count"].sum().reset_index()
+            )
+
+            # Garantir ordem das categorias no eixo x conforme integration_columns
+            status_counts["Type"] = pd.Categorical(status_counts["Type"], categories=integration_columns, ordered=True)
+
+            fig = px.bar(
+                status_counts,
+                x="Type",
+                y="Count",
+                color="Status",
+                text="Count",
+                title="Resumo do Status por Categoria",
+                labels={"Type": "Categoria", "Count": "Quantidade", "Status": "Status"},
+                category_orders={"Type": integration_columns, "Status": ["Concluido", "Faltando"]},
+                color_discrete_map={
+                    "Concluido": "#1f77b4",  # Azul similar ao rollout
+                    "Faltando": "#ff7f0e",   # Laranja similar ao rollout
+                }
+            )
+            # Let Plotly decide best text position (inside/outside) and give room at the top
+            fig.update_traces(textposition="auto")
+            fig.update_layout(margin=dict(t=80), legend_title_text="Status", uniformtext_minsize=8)
+            st.plotly_chart(fig, use_container_width=True)
+
+        elif graph_option == "General Status":
+            # Gráfico de General Status
+            general_status_counts = df["General Status"].value_counts().rename_axis("Status").reset_index(name="Count")
+
+            fig = px.bar(
+                general_status_counts,
+                x="Status",
+                y="Count",
+                text="Count",
+                title="Resumo do General Status",
+                labels={"Status": "Status", "Count": "Quantidade"},
+                color="Status",
+                color_discrete_map={
+                    "Finished": "#28a745",  # Verde vibrante
+                    "On going": "#007bff",  # Azul vibrante
+                    "Waiting": "#ffc107"  # Amarelo vibrante
+                }
+            )
+            fig.update_traces(textposition="outside")
+            st.plotly_chart(fig, use_container_width=True)
+
+    # Tabela de resumo: selecionar apenas colunas existentes (pertence à seção 'Status de Integração')
+    if st.session_state.get("int_show_status", True):
+        desired_columns = [
+            "Site Name", "General Status", "4G Status", "2G Status",
+            "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"
         ]
-
-        status_counts = pd.concat([
-            df[col].value_counts().rename_axis("Status").reset_index(name="Count").assign(Type=col)
-            for col in integration_columns if col in df.columns
-        ])
-
-        # Map raw status values into three groups: Concluido, Faltando
-        def _map_to_group(s):
-            if pd.isna(s):
-                return None  # Ignorar valores nulos
-            v = str(s).strip().lower()
-            # Concluido
-            if v in {"finished"}:
-                return "Concluido"
-            # Faltando
-            if v in {"pending", "kpi rejected", "pendência", "pendência kpi", "upload to iw", "waiting approval", "waiting", "aguardando aprovação"}:
-                return "Faltando"
-            # Unknown ou outros valores não devem ser contados
-            return None
-
-        status_counts["Status"] = status_counts["Status"].map(_map_to_group)
-
-        # Excluir valores não mapeados (None)
-        status_counts = status_counts[status_counts["Status"].notna()]
-
-        # Aggregate counts after mapping
-        status_counts = (
-            status_counts.groupby(["Type", "Status"])["Count"].sum().reset_index()
-        )
-
-        # Garantir ordem das categorias no eixo x conforme integration_columns
-        status_counts["Type"] = pd.Categorical(status_counts["Type"], categories=integration_columns, ordered=True)
-
-        fig = px.bar(
-            status_counts,
-            x="Type",
-            y="Count",
-            color="Status",
-            text="Count",
-            title="Resumo do Status por Categoria",
-            labels={"Type": "Categoria", "Count": "Quantidade", "Status": "Status"},
-            category_orders={"Type": integration_columns, "Status": ["Concluido", "Faltando"]},
-            color_discrete_map={
-                "Concluido": "#1f77b4",  # Azul similar ao rollout
-                "Faltando": "#ff7f0e",   # Laranja similar ao rollout
-            }
-        )
-        # Let Plotly decide best text position (inside/outside) and give room at the top
-        fig.update_traces(textposition="auto")
-        fig.update_layout(margin=dict(t=80), legend_title_text="Status", uniformtext_minsize=8)
-        st.plotly_chart(fig, use_container_width=True)
-
-    elif graph_option == "General Status":
-        # Gráfico de General Status
-        general_status_counts = df["General Status"].value_counts().rename_axis("Status").reset_index(name="Count")
-
-        fig = px.bar(
-            general_status_counts,
-            x="Status",
-            y="Count",
-            text="Count",
-            title="Resumo do General Status",
-            labels={"Status": "Status", "Count": "Quantidade"},
-            color="Status",
-            color_discrete_map={
-                "Finished": "#28a745",  # Verde vibrante
-                "On going": "#007bff",  # Azul vibrante
-                "Waiting": "#ffc107"  # Amarelo vibrante
-            }
-        )
-        fig.update_traces(textposition="outside")
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Tabela de resumo: selecionar apenas colunas existentes
-    desired_columns = [
-        "Site Name", "General Status", "4G Status", "2G Status",
-        "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"
-    ]
-    existing_cols = [c for c in desired_columns if c in df.columns]
-    status_summary = df[existing_cols]
+        existing_cols = [c for c in desired_columns if c in df.columns]
+        status_summary = df[existing_cols]
 
     # ---- Converter status para a PRIMEIRA tabela (apenas) para Concluido / Faltando ----
-    # Mapear valores para Concluido / Faltando (aplica-se somente na tabela de resumo)
-    def map_to_two(s):
-        if pd.isna(s):
+    # Esta lógica pertence exclusivamente à seção 'Status de Integração' e
+    # deve ser executada somente quando essa seção estiver visível.
+    if st.session_state.get("int_show_status", True):
+        # Mapear valores para Concluido / Faltando (aplica-se somente na tabela de resumo)
+        def map_to_two(s):
+            if pd.isna(s):
+                return None
+            v = str(s).strip().lower()
+            if v == "finished":
+                return "Concluido"
+            if v in {"pending", "kpi rejected", "pendência", "pendência kpi", "pendencia", "upload to iw", "waiting approval", "waiting", "aguardando aprovação"}:
+                return "Faltando"
             return None
-        v = str(s).strip().lower()
-        if v == "finished":
-            return "Concluido"
-        if v in {"pending", "kpi rejected", "pendência", "pendência kpi", "pendencia", "upload to iw", "waiting approval", "waiting", "aguardando aprovação"}:
-            return "Faltando"
-        return None
 
-    # Aplicar a transformação somente nas colunas de teste/status presentes
-    status_cols = [c for c in ["4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"] if c in status_summary.columns]
-    summary_for_display = status_summary.copy()
-    for c in status_cols:
-        summary_for_display[c] = summary_for_display[c].map(map_to_two)
+        # Aplicar a transformação somente nas colunas de teste/status presentes
+        status_cols = [c for c in ["4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"] if c in status_summary.columns]
+        summary_for_display = status_summary.copy()
+        for c in status_cols:
+            summary_for_display[c] = summary_for_display[c].map(map_to_two)
 
-    # Estilização da tabela de resumo: Concluido (azul), Faltando (laranja)
-    def style_two(val):
-        if pd.isna(val):
+        # Estilização da tabela de resumo: Concluido (azul), Faltando (laranja)
+        def style_two(val):
+            if pd.isna(val):
+                return ""
+            v = str(val).strip().lower()
+            if v == "concluido":
+                return "color: #1f77b4; font-weight: 600"
+            if v == "faltando":
+                return "color: #ff7f0e; font-weight: 600"
             return ""
-        v = str(val).strip().lower()
-        if v == "concluido":
-            return "color: #1f77b4; font-weight: 600"
-        if v == "faltando":
-            return "color: #ff7f0e; font-weight: 600"
-        return ""
 
-    if not summary_for_display.empty:
-        styled_summary = summary_for_display.style.applymap(style_two, subset=status_cols)
-        st.dataframe(styled_summary, use_container_width=True)
-    else:
-        st.write("Nenhum registro para exibir na tabela de resumo.")
+        if not summary_for_display.empty:
+            styled_summary = summary_for_display.style.applymap(style_two, subset=status_cols)
+            st.dataframe(styled_summary, use_container_width=True)
+        else:
+            st.write("Nenhum registro para exibir na tabela de resumo.")
 
     # ---- Tabela Fiel: manter valores originais (fiel), mas aplicar cores por valor ----
-    # Cores por valor usadas na planilha (aproximação):
-    faithful_colors = {
-        "finished": "background-color: #d4edda; color: #155724",  # greenish
-        "pending": "background-color: #fff3cd; color: #856404",   # orange/yellow
-        "kpi rejected": "background-color: #f8d7da; color: #721c24",  # red-ish
-        "waiting approval": "background-color: #cfe2ff; color: #084298",  # blue-ish
-        "upload to iw": "background-color: #d1ecf1; color: #0c5460",  # light-blue
-        "on going": "background-color: #cfe2ff; color: #084298",  # blue-ish (On going)
-        "ongoing": "background-color: #cfe2ff; color: #084298"  # variant
-    }
+    if st.session_state.get("int_show_fiel", True):
+        # Cores por valor usadas na planilha (aproximação):
+        faithful_colors = {
+            "finished": "background-color: #d4edda; color: #155724",  # greenish
+            "pending": "background-color: #fff3cd; color: #856404",   # orange/yellow
+            "kpi rejected": "background-color: #f8d7da; color: #721c24",  # red-ish
+            "waiting approval": "background-color: #cfe2ff; color: #084298",  # blue-ish
+            "upload to iw": "background-color: #d1ecf1; color: #0c5460",  # light-blue
+            "on going": "background-color: #cfe2ff; color: #084298",  # blue-ish (On going)
+            "ongoing": "background-color: #cfe2ff; color: #084298"  # variant
+        }
 
-    def style_faithful(val):
-        if pd.isna(val):
-            return ""
-        v = str(val).strip().lower()
-        return faithful_colors.get(v, "")
+        def style_faithful(val):
+            if pd.isna(val):
+                return ""
+            v = str(val).strip().lower()
+            return faithful_colors.get(v, "")
 
-    st.markdown(
-        """
-        <h2 style='margin: 12px 0; font-size: 24px;'>Tabela Fiel</h2>
-        """,
-        unsafe_allow_html=True,
-    )
-    with st.expander("Tabela Fiel", expanded=False):
-        # aplicar largura do Comment e coloração nas colunas de status existentes
-        fiel_status_cols = [c for c in ["General Status", "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"] if c in df.columns]
-        base_style = df.style.set_properties(subset=["Comment"] if "Comment" in df.columns else [], **{"width": "300px"})
-        if fiel_status_cols:
-            base_style = base_style.applymap(style_faithful, subset=fiel_status_cols)
-        st.dataframe(base_style, use_container_width=True)
+        st.markdown(
+            """
+            <h2 style='margin: 12px 0; font-size: 24px;'>Tabela Fiel</h2>
+            """,
+            unsafe_allow_html=True,
+        )
+        with st.expander("Tabela Fiel", expanded=False):
+            # aplicar largura do Comment e coloração nas colunas de status existentes
+            fiel_status_cols = [c for c in ["General Status", "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"] if c in df.columns]
+            base_style = df.style.set_properties(subset=["Comment"] if "Comment" in df.columns else [], **{"width": "300px"})
+            if fiel_status_cols:
+                base_style = base_style.applymap(style_faithful, subset=fiel_status_cols)
+            st.dataframe(base_style, use_container_width=True)

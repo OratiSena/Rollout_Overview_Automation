@@ -243,6 +243,23 @@ with st.sidebar:
     .zte-tree-wrap{  margin:2px 0 0 8px; padding-left:12px; border-left:1px solid #3a3f44; }
     .zte-int-wrap{   margin:2px 0 0 8px; padding-left:12px; border-left:1px solid #3a3f44; }
     .zte-tree-wrap .ant-tree-treenode{ padding:2px 0 !important; }
+    /* Make the first tree node inside the Integracao wrapper visually disabled
+       and non-interactive (user cannot click its checkbox or label). Also force
+       the checked box color to gray so it differs from normal checked color. */
+    .zte-int-wrap .ant-tree .ant-tree-treenode:first-child,
+    .zte-int-wrap .ant-tree .ant-tree-treenode:first-child * {
+        pointer-events: none !important;
+    }
+    .zte-int-wrap .ant-tree .ant-tree-treenode:first-child .ant-tree-node-content-wrapper {
+        color: #bfc3c6 !important;
+        opacity: 0.95;
+        cursor: default !important;
+    }
+    .zte-int-wrap .ant-tree .ant-tree-treenode:first-child .ant-tree-checkbox-checked .ant-tree-checkbox-inner,
+    .zte-int-wrap .ant-tree .ant-tree-treenode:first-child .ant-tree-checkbox-inner {
+        background: #6c6f75 !important;
+        border-color: #6c6f75 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -278,12 +295,64 @@ with st.sidebar:
         st.markdown("</div>", unsafe_allow_html=True)
 
     else:  # Integracao
-        st.markdown(
-            "<div class='zte-int-wrap' style='color:#9aa0a6;font-size:13px;'>"
-            "Visualizacoes da integracao em desenvolvimento."
-            "</div>",
-            unsafe_allow_html=True,
-        )
+        st.markdown("<div class='zte-int-wrap'>", unsafe_allow_html=True)
+        # 'Filtros' is fixed (always shown) so we don't include it in the selectable tree.
+        st.session_state.int_show_filters = True
+        # 'Filtros' will be shown as the first tree node. We include it in the
+        # items so it visually belongs to the tree. Internally it is fixed: the
+        # app will always treat filters as present (st.session_state.int_show_filters=True).
+        items = [
+            sac.TreeItem("Filtros"),
+            sac.TreeItem("Status de Integração"),
+            sac.TreeItem("Tabela Fiel"),
+        ]
+        default_idx = [0]
+        if st.session_state.get("int_show_status", True):
+            default_idx.append(1)
+        if st.session_state.get("int_show_fiel", True):
+            default_idx.append(2)
+
+        # Pre-set the widget value (list of labels) so 'Filtros' is always present
+        # and appears checked. Setting session_state for a widget key must be done
+        # before the widget is created on this run.
+        default_labels = ["Filtros"]
+        if st.session_state.get("int_show_status", True):
+            default_labels.append("Status de Integração")
+        if st.session_state.get("int_show_fiel", True):
+            default_labels.append("Tabela Fiel")
+        # Only override the widget value if it doesn't already include 'Filtros'
+        cur_val = st.session_state.get("integracao_tree")
+        if not cur_val or "Filtros" not in (cur_val if isinstance(cur_val, (list, tuple)) else [cur_val]):
+            st.session_state["integracao_tree"] = default_labels
+
+        selected = sac.tree(
+            items=items,
+            index=default_idx,
+            checkbox=True,
+            checkbox_strict=True,
+            open_all=True,
+            show_line=True,
+            return_index=False,
+            key="integracao_tree",
+        ) or []
+        sel = set(selected)
+        # Ensure 'Filtros' is always present. If the user managed to deselect it,
+        # reset the widget state and rerun so the tree re-renders with 'Filtros' checked.
+        st.session_state.int_show_filters = True
+        if "Filtros" not in sel:
+            # Rebuild the labels we want selected and set them, then rerun.
+            desired = ["Filtros"]
+            if st.session_state.get("int_show_status", True):
+                desired.append("Status de Integração")
+            if st.session_state.get("int_show_fiel", True):
+                desired.append("Tabela Fiel")
+            st.session_state["integracao_tree"] = desired
+            st.experimental_rerun()
+
+        st.session_state.int_show_status = "Status de Integração" in sel
+        st.session_state.int_show_fiel = "Tabela Fiel" in sel
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # --- Rodapé ---
     st.markdown("---")
