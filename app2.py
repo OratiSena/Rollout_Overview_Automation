@@ -180,7 +180,26 @@ def page_integracao() -> None:
                     for k in keys_to_clear:
                         if k in st.session_state:
                             del st.session_state[k]
-                    st.experimental_rerun()
+                    # Restore explicit defaults (ensure widgets show their initial values)
+                    st.session_state["f_gen_status"] = []
+                    st.session_state["f_txt_search"] = ""
+                    st.session_state["f_region"] = []
+                    st.session_state["f_arq"] = []
+                    st.session_state["f_graph_option"] = "Integração Concluído x Faltando"
+                    # For status mapping and OT filters, set empty selections
+                    for col in status_columns:
+                        st.session_state.setdefault(f"map_{col}", [])
+                    for col in ot_columns:
+                        st.session_state.setdefault(f"f_ot_{col}", [])
+
+                    # Try to rerun the app; Streamlit API differs across versions.
+                    try:
+                        st.experimental_rerun()
+                    except Exception:
+                        try:
+                            st.rerun()
+                        except Exception:
+                            st.stop()
 
 
             # (Integration date / MOS removed from filters - sheet no longer provides them)
@@ -352,7 +371,7 @@ def page_integracao() -> None:
                 color="Status",
                 text="Count",
                 title="Resumo do Status por Categoria",
-                labels={"Type": "Categoria", "Count": "Quantidade", "Status": "Status"},
+                labels={"Type": "Status", "Count": "Quantidade", "Status": "Status"},
                 category_orders={"Type": integration_columns, "Status": ["Concluido", "Faltando"]},
                 color_discrete_map={
                     "Concluido": "#1f77b4",  # Azul similar ao rollout
@@ -432,8 +451,8 @@ def page_integracao() -> None:
         else:
             st.write("Nenhum registro para exibir na tabela de resumo.")
 
-    # ---- Tabela Fiel: manter valores originais (fiel), mas aplicar cores por valor ----
-    if st.session_state.get("int_show_fiel", True):
+    # ---- Tabela Consolidada: manter valores originais (fiel), mas aplicar cores por valor ----
+    if st.session_state.get("int_show_consolidada", True):
         # Cores por valor usadas na planilha (aproximação):
         faithful_colors = {
             "finished": "background-color: #d4edda; color: #155724",  # greenish
@@ -453,11 +472,11 @@ def page_integracao() -> None:
 
         st.markdown(
             """
-            <h2 style='margin: 12px 0; font-size: 24px;'>Tabela Fiel</h2>
+            <h2 style='margin: 12px 0; font-size: 24px;'>Tabela Consolidada</h2>
             """,
             unsafe_allow_html=True,
         )
-        with st.expander("Tabela Fiel", expanded=False):
+        with st.expander("Tabela Consolidada", expanded=False):
             # aplicar largura do Comment e coloração nas colunas de status existentes
             fiel_status_cols = [c for c in ["General Status", "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"] if c in df.columns]
             base_style = df.style.set_properties(subset=["Comment"] if "Comment" in df.columns else [], **{"width": "300px"})

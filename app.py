@@ -210,6 +210,9 @@ with st.sidebar:
     st.session_state.setdefault("show_status", True)
     st.session_state.setdefault("show_lead", True)
     st.session_state.setdefault("show_fiel", True)
+    # By default keep consolidated tables off; user must explicitly enable them
+    st.session_state.setdefault("show_consolidada", False)
+    st.session_state.setdefault("int_show_consolidada", False)
 
     # --- Título seção ---
     st.markdown(
@@ -290,19 +293,19 @@ with st.sidebar:
             sac.TreeItem("Filtros"),
             sac.TreeItem("Visualização por Status"),
             sac.TreeItem("Análise por Site (lead time)"),
-            sac.TreeItem("Tabela Fiel/Real"),
+            sac.TreeItem("Tabela Consolidada"),
         ]
         # default indices (the first item 'Filtros' is always checked)
         default_idx = [0]
         if st.session_state.get("show_status", True): default_idx.append(1)
         if st.session_state.get("show_lead", True):   default_idx.append(2)
-        if st.session_state.get("show_fiel", True):   default_idx.append(3)
+        # Removed default inclusion of 'Tabela Consolidada'
 
         # Pre-seed the widget value so 'Filtros' renders checked on load.
         default_labels = ["Filtros"]
         if st.session_state.get("show_status", True): default_labels.append("Visualização por Status")
         if st.session_state.get("show_lead", True):   default_labels.append("Análise por Site (lead time)")
-        if st.session_state.get("show_fiel", True):   default_labels.append("Tabela Fiel/Real")
+        # Removed default inclusion of 'Tabela Consolidada'
         cur_val = st.session_state.get("rollout_tree")
         if not cur_val or "Filtros" not in (cur_val if isinstance(cur_val, (list, tuple)) else [cur_val]):
             st.session_state["rollout_tree"] = default_labels
@@ -323,14 +326,14 @@ with st.sidebar:
             desired = ["Filtros"]
             if st.session_state.get("show_status", True): desired.append("Visualização por Status")
             if st.session_state.get("show_lead", True):   desired.append("Análise por Site (lead time)")
-            if st.session_state.get("show_fiel", True):   desired.append("Tabela Fiel/Real")
+            # Removed default inclusion of 'Tabela Consolidada'
             st.session_state["rollout_tree"] = desired
             st.experimental_rerun()
 
         st.session_state.show_status = "Visualização por Status" in sel
         st.session_state.show_lead   = "Análise por Site (lead time)" in sel
-        st.session_state.show_fiel   = "Tabela Fiel/Real" in sel
-
+        st.session_state.show_consolidada   = "Tabela Consolidada" in sel
+        # Sidebar only sets the state; actual rendering happens in the main page.
         st.markdown("</div>", unsafe_allow_html=True)
 
     else:  # Integracao
@@ -338,18 +341,17 @@ with st.sidebar:
         # 'Filtros' is fixed (always shown) so we don't include it in the selectable tree.
         st.session_state.int_show_filters = True
         # 'Filtros' will be shown as the first tree node. We include it in the
-        # items so it visually belongs to the tree. Internally it is fixed: the
-        # app will always treat filters as present (st.session_state.int_show_filters=True).
+        # items so it visually belongs to the tree. Internally it is fixo: o
+        # app sempre tratará os filtros como presentes (st.session_state.int_show_filters=True).
         items = [
             sac.TreeItem("Filtros"),
             sac.TreeItem("Status de Integração"),
-            sac.TreeItem("Tabela Fiel"),
+            sac.TreeItem("Tabela Consolidada"),
         ]
         default_idx = [0]
         if st.session_state.get("int_show_status", True):
             default_idx.append(1)
-        if st.session_state.get("int_show_fiel", True):
-            default_idx.append(2)
+        # Removed default inclusion of 'Tabela Consolidada'
 
         # Pre-set the widget value (list of labels) so 'Filtros' is always present
         # and appears checked. Setting session_state for a widget key must be done
@@ -357,9 +359,7 @@ with st.sidebar:
         default_labels = ["Filtros"]
         if st.session_state.get("int_show_status", True):
             default_labels.append("Status de Integração")
-        if st.session_state.get("int_show_fiel", True):
-            default_labels.append("Tabela Fiel")
-        # Only override the widget value if it doesn't already include 'Filtros'
+        # Removed default inclusion of 'Tabela Consolidada'
         cur_val = st.session_state.get("integracao_tree")
         if not cur_val or "Filtros" not in (cur_val if isinstance(cur_val, (list, tuple)) else [cur_val]):
             st.session_state["integracao_tree"] = default_labels
@@ -383,14 +383,13 @@ with st.sidebar:
             desired = ["Filtros"]
             if st.session_state.get("int_show_status", True):
                 desired.append("Status de Integração")
-            if st.session_state.get("int_show_fiel", True):
-                desired.append("Tabela Fiel")
+            # Removed default inclusion of 'Tabela Consolidada'
             st.session_state["integracao_tree"] = desired
             st.experimental_rerun()
 
         st.session_state.int_show_status = "Status de Integração" in sel
-        st.session_state.int_show_fiel = "Tabela Fiel" in sel
-
+        st.session_state.int_show_consolidada = "Tabela Consolidada" in sel
+        # Sidebar only sets the state; actual rendering happens in the main page.
         st.markdown("</div>", unsafe_allow_html=True)
 
     # --- Rodapé ---
@@ -826,11 +825,24 @@ def render_fiel_real(df_raw: pd.DataFrame, sites_f: pd.DataFrame):
     except Exception:
         sel_labels = []
     tree_has_fiel = any(s.strip().startswith("Tabela Fiel") for s in sel_labels)
-    show_fiel_flag = (st.session_state.get("show_fiel", True) if route == "rollout" else st.session_state.get("int_show_fiel", True)) or tree_has_fiel
-    if show_fiel_flag:
-        st.markdown("<h3 style='margin: 18px 0 6px;'>Tabela Fiel</h3>", unsafe_allow_html=True)
+    # Respect the new 'Tabela Consolidada' sidebar toggles. By default
+    # consolidated tables are off; they should render only when the
+    # user explicitly enables them. Keep legacy 'fiel' behavior as
+    # a fallback if that was selected in the tree.
+    rollout_consol = st.session_state.get("show_consolidada", False)
+    integr_consol = st.session_state.get("int_show_consolidada", False)
+    consol_flag = (rollout_consol if route == "rollout" else integr_consol)
+    # Preserve 'fiel' visibility independent from consolidated toggle
+    show_fiel_flag = (
+        (st.session_state.get("show_fiel", True) if route == "rollout" else st.session_state.get("int_show_fiel", True))
+        or tree_has_fiel
+    )
+    # Only render the consolidated table when the consolidated toggle is on
+    # (consol_flag) or when the legacy tree label 'Tabela Fiel' was selected.
+    if consol_flag or tree_has_fiel:
+        st.markdown("<h3 style='margin: 18px 0 6px;'>Tabela Consolidada</h3>", unsafe_allow_html=True)
         # Outer expander: Tabela Fiel (closed by default per request)
-        with st.expander("Tabela Fiel", expanded=False):
+        with st.expander("Tabela Consolidada", expanded=False):
             with st.expander("Opcoes da tabela", expanded=False):
                 l4_all = [x for x in list(dict.fromkeys(df_all.columns.get_level_values(0))) if _norm(x)]
                 show_blks = st.multiselect(
