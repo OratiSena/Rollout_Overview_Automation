@@ -187,13 +187,31 @@ def page_integracao() -> None:
                         if k in st.session_state:
                             del st.session_state[k]
                     # Restore explicit defaults (ensure widgets show their initial values)
-                    st.session_state["f_gen_status"] = []
-                    st.session_state["f_txt_search"] = ""
-                    st.session_state["f_region"] = []
-                    st.session_state["f_arq"] = []
-                    st.session_state["f_graph_option"] = "Sites por status (status atual)"
+                    try:
+                        st.session_state["f_gen_status"] = []
+                    except Exception:
+                        st.session_state.setdefault("f_gen_status", [])
+                    try:
+                        st.session_state["f_txt_search"] = ""
+                    except Exception:
+                        st.session_state.setdefault("f_txt_search", "")
+                    try:
+                        st.session_state["f_region"] = []
+                    except Exception:
+                        st.session_state.setdefault("f_region", [])
+                    try:
+                        st.session_state["f_arq"] = []
+                    except Exception:
+                        st.session_state.setdefault("f_arq", [])
+                    try:
+                        st.session_state["f_graph_option"] = "Integração Concluído x Faltando"
+                    except Exception:
+                        st.session_state.setdefault("f_graph_option", "Integração Concluído x Faltando")
                     # restore status_choice default
-                    st.session_state["f_status_choice"] = "Geral"
+                    try:
+                        st.session_state["f_status_choice"] = "Geral"
+                    except Exception:
+                        st.session_state.setdefault("f_status_choice", "Geral")
                     # For status mapping and OT filters, set empty selections
                     for col in status_columns:
                         st.session_state.setdefault(f"map_{col}", [])
