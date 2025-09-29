@@ -131,6 +131,8 @@ def page_integracao() -> None:
     # quanto a atualizada (após filtros) apareçam acima do título 'Filtros'
     msg_ph = st.empty()
     msg_ph.success(f"Planilha carregada com {site_count:,} sites válidos identificados.")
+    
+    # debug output removed
 
     # Cabeçalho de filtros — os widgets reais ficam dentro do expander abaixo
     if st.session_state.get("int_show_filters", True):
@@ -172,11 +174,20 @@ def page_integracao() -> None:
                     index=0,
                     key="f_graph_option",
                 )
-                # Global Status radio: Geral, Concluidos, Faltando, Unknow
-                status_choice = st.radio("Status", options=["Geral", "Concluidos", "Faltando", "Unknow"], index=0, key="f_status_choice")
+                # Global Status radio: normally Geral, Concluidos, Faltando, Unknow
+                # but for some graphs (Sites por status, General Status) Concluidos/Faltando
+                # don't make sense — present only Geral and Unknow in those cases.
+                if graph_option in {"Sites por status (status atual)", "General Status"}:
+                    status_options = ["Geral", "Unknow"]
+                    default_idx = 0
+                else:
+                    status_options = ["Geral", "Concluidos", "Faltando", "Unknow"]
+                    default_idx = 0
+                status_choice = st.radio("Status", options=status_options, index=default_idx, key="f_status_choice")
             with top_cols[1]:
                 if st.button("Resetar", key="f_reset_filters"):
-                    keys_to_clear = ["f_gen_status", "f_txt_search", "f_region", "f_arq", "f_graph_option"]
+                    # include f_status_choice so the Status radio returns to the default on rerun
+                    keys_to_clear = ["f_gen_status", "f_txt_search", "f_region", "f_arq", "f_graph_option", "f_status_choice"]
                     # include the new status_atual filter key
                     keys_to_clear.append("f_status_atual")
                     for col in status_columns:
@@ -187,6 +198,11 @@ def page_integracao() -> None:
                         if k in st.session_state:
                             del st.session_state[k]
                     # Restore explicit defaults (ensure widgets show their initial values)
+                    # Ensure Status radio explicitly set to default 'Geral'
+                    try:
+                        st.session_state["f_status_choice"] = "Geral"
+                    except Exception:
+                        st.session_state.setdefault("f_status_choice", "Geral")
                     try:
                         st.session_state["f_gen_status"] = []
                     except Exception:
@@ -236,7 +252,7 @@ def page_integracao() -> None:
             mos_start = mos_end = None
 
             # Preparar valores e colunas utilizáveis (após os controles do topo)
-            search_columns = [c for c in ["Site Name", "General Status", "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "Region", "Comment", "ARQ Number", "OT Status", "OT 2G", "OT 4G"] if c in df.columns]
+            search_columns = [c for c in ["Site Name", "Region", "General Status", "Comment", "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "ARQ Number", "OT Status", "OT 2G", "OT 4G", "OT Date"] if c in df.columns]
             # New filter: Selecionar por status_atual (computed)
             # We compute the available options from the raw dataframe (before applying other filters)
             # and display them in a fixed order with numeric prefixes.
@@ -285,13 +301,11 @@ def page_integracao() -> None:
                     display_map[label] = step
                     ordered_display.append(label)
 
-            # Include Sem informação and Concluído at the end if present
+            # Include Sem informação at the end if present (but NOT Concluído)
             if "Sem informação" in unique_vals:
                 display_map["Sem informação"] = "Sem informação"
                 ordered_display.append("Sem informação")
-            if "Concluído" in unique_vals:
-                display_map["Concluído"] = "Concluído"
-                ordered_display.append("Concluído")
+            # Do NOT include Concluído option - it's controlled by the Status radio
 
             sel_status_atual = st.multiselect("Selecione o Status:", options=ordered_display, default=[], key="f_status_atual")
             # Top row: General Status first, then search, then region, then ARQ
@@ -373,45 +387,20 @@ def page_integracao() -> None:
             return "Faltando"
         return None
 
-    # Apply global Status radio filter
+    # Apply global Status radio filter BEFORE the specific column filter
     status_choice = st.session_state.get("f_status_choice", "Geral")
-    # Interpret General Status 'in integration' as Finished/On going/Unknown mapping already used elsewhere
-    def _is_integration_row(row):
-        v = row.get("General Status") if "General Status" in row.index else None
-        if pd.isna(v):
-            return False
-        s = str(v).strip().lower()
-        return s != "unknown" and s != ""
-
-    if status_choice == "Concluidos":
-        # Use OT Status finished as the source of truth for Concluidos (OT Status columns)
-        ot_mask = pd.Series(False, index=df_filtered.index)
-        for col in ot_columns:
-            if col in df_filtered.columns:
-                ot_mask = ot_mask | (df_filtered[col].astype(str).str.strip().str.lower() == "finished")
-        df_filtered = df_filtered[ot_mask]
-    elif status_choice == "Faltando":
-        # Faltando: any status column mapped to Faltando
-        mask = pd.Series(False, index=df_filtered.index)
-        for col in status_columns:
-            mapped = df_filtered[col].apply(map_to_two_local)
-            mask = mask | mapped.isin(["Faltando"])
-        df_filtered = df_filtered[mask]
+    
+    if status_choice == "Geral":
+        # Geral: show only rows that are in integration (General Status = "Finished" or "On going")
+        if "General Status" in df_filtered.columns:
+            mask = df_filtered["General Status"].astype(str).str.strip().str.lower().isin(['finished', 'on going', 'ongoing'])
+            df_filtered = df_filtered[mask]
     elif status_choice == "Unknow":
         # Unknow: rows not in integration (General Status empty or Unknown)
-        mask = pd.Series(False, index=df_filtered.index)
         if "General Status" in df_filtered.columns:
-            mask = df_filtered["General Status"].astype(str).str.strip().str.lower().isin(["", "nan", "unknown"])
-        else:
-            # if General Status absent, nothing is Unknown
-            mask = pd.Series(False, index=df_filtered.index)
-        df_filtered = df_filtered[mask]
-    else:
-        # Geral: show only rows that are in integration (exclude Unknown/empty General Status)
-        mask = pd.Series(False, index=df_filtered.index)
-        if "General Status" in df_filtered.columns:
-            mask = df_filtered["General Status"].astype(str).str.strip().str.lower().apply(lambda s: s not in {"", "nan", "unknown"})
-        df_filtered = df_filtered[mask]
+            mask = ~df_filtered["General Status"].astype(str).str.strip().str.lower().isin(['finished', 'on going', 'ongoing'])
+            df_filtered = df_filtered[mask]
+    # For Concluidos and Faltando, we'll apply the filter AFTER the column selection
 
     # OT raw filters
     for col, sel in (sel_ot.items() if ot_columns else []):
@@ -420,6 +409,16 @@ def page_integracao() -> None:
 
     # Usar df_filtered em vez de df daqui para frente (gráfico e tabelas)
     df = df_filtered
+
+    # If the user chose Concluidos or Faltando globally, exclude Unknown General Status rows
+    # so these modes ignore Unknown sites as requested by the user.
+    status_choice = st.session_state.get("f_status_choice", "Geral")
+    if status_choice in {"Concluidos", "Faltando"} and "General Status" in df.columns:
+        before_all = len(df)
+        in_integration_mask = df["General Status"].astype(str).str.strip().str.lower().isin(["finished", "on going", "ongoing"])
+        df = df[in_integration_mask]
+        after_all = len(df)
+        # debug output removed
 
     # --- Compute status_atual for the filtered dataframe and allow filtering by it ---
     def _compute_status_atual_for_df(src_df: pd.DataFrame) -> pd.Series:
@@ -467,10 +466,50 @@ def page_integracao() -> None:
 
     # Map display labels back to actual values and apply the new status_atual filter if present
     if sel_status_atual:
-        mapped = []
+        # Simple mapping: extract column name from numbered labels like "2 - 2G Status"
+        mapped_columns = []
         for sel in sel_status_atual:
-            mapped.append(display_map.get(sel, sel))
-        df = df[df["status_atual"].isin(mapped)]
+            if " - " in str(sel):
+                # Extract column name after " - "
+                col_name = str(sel).split(" - ", 1)[1]
+                mapped_columns.append(col_name)
+            else:
+                mapped_columns.append(sel)
+
+        # If user selected Concluidos or Faltando, we must first exclude 'Unknown' General Status
+        # because the user requested that Geral/Concluido/Faltando ignore Unknown sites.
+        if status_choice in {"Concluidos", "Faltando"} and "General Status" in df.columns:
+            before_count = len(df)
+            in_integration_mask = df["General Status"].astype(str).str.strip().str.lower().isin(["finished", "on going", "ongoing"])
+            df = df[in_integration_mask]
+            after_count = len(df)
+            # debug output removed
+
+        # Now apply the Concluidos/Faltando filter based on the SELECTED columns
+        if status_choice == "Concluidos":
+            # Show rows where ALL selected columns map to 'Concluido'
+            mask_all = pd.Series(True, index=df.index)
+            for col in mapped_columns:
+                if col in df.columns:
+                    mapped = df[col].apply(map_to_two_local)
+                    col_mask = mapped == "Concluido"
+                    mask_all = mask_all & col_mask
+            df = df[mask_all]
+        elif status_choice == "Faltando":
+            # Show rows where ANY selected column maps to 'Faltando'
+            mask_any = pd.Series(False, index=df.index)
+            for col in mapped_columns:
+                if col in df.columns:
+                    mapped = df[col].apply(map_to_two_local)
+                    col_mask = mapped == "Faltando"
+                    mask_any = mask_any | col_mask
+            df = df[mask_any]
+        else:
+            # For "Geral", show ALL rows with the selected columns (regardless of their status)
+            # No additional filtering needed beyond the General Status filter above
+            pass
+
+        # debug output removed
 
     # Atualizar a mensagem placeholder para contar apenas os sites filtrados
     site_count = df["Site Name"].nunique() if "Site Name" in df.columns else 0
@@ -503,16 +542,38 @@ def page_integracao() -> None:
             integration_columns = [
                 "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"
             ]
+            
+            # Se há filtro por status específico, mostrar apenas essas colunas
+            sel_status_atual = st.session_state.get("f_status_atual", [])
+            df_chart = df
+            if sel_status_atual:
+                # Extrair nomes das colunas selecionadas and phases
+                filtered_columns = []
+                phases = []
+                for sel in sel_status_atual:
+                    if " - " in str(sel):
+                        col_name = str(sel).split(" - ", 1)[1]
+                    else:
+                        col_name = sel
+                    # record phase name for row filtering if it's a phase value
+                    phases.append(col_name)
+                    if col_name in integration_columns:
+                        filtered_columns.append(col_name)
+                # restrict columns to show if any matched
+                if filtered_columns:
+                    integration_columns = filtered_columns
+                # filter rows to sites whose computed status_atual is one of the selected phases
+                df_chart = df_chart[df_chart["status_atual"].isin(phases)]
 
             status_counts = pd.concat([
-                df[col].value_counts().rename_axis("Status").reset_index(name="Count").assign(Type=col)
-                for col in integration_columns if col in df.columns
+                df_chart[col].value_counts().rename_axis("Status").reset_index(name="Count").assign(Type=col)
+                for col in integration_columns if col in df_chart.columns
             ])
 
-            # Map raw status values into three groups: Concluido, Faltando
+            # Map raw status values into groups: Concluido, Faltando, Unknow
             def _map_to_group(s):
                 if pd.isna(s):
-                    return None  # Ignorar valores nulos
+                    return "Unknow"
                 v = str(s).strip().lower()
                 # Concluido
                 if v in {"finished"}:
@@ -520,13 +581,23 @@ def page_integracao() -> None:
                 # Faltando
                 if v in {"pending", "kpi rejected", "pendência", "pendência kpi", "upload to iw", "waiting approval", "waiting", "aguardando aprovação"}:
                     return "Faltando"
-                # Unknown ou outros valores não devem ser contados
-                return None
+                # Treat empty/unknown-like as Unknow
+                if v in {"", "unknown", "nan", "none"}:
+                    return "Unknow"
+                # Other values we consider Unknow for the purposes of this summary
+                return "Unknow"
 
             status_counts["Status"] = status_counts["Status"].map(_map_to_group)
 
-            # Excluir valores não mapeados (None)
-            status_counts = status_counts[status_counts["Status"].notna()]
+            # If the global Status radio requests only Concluidos or only Faltando,
+            # limit the chart to that group so it doesn't display the other category.
+            global_choice = st.session_state.get("f_status_choice", "Geral")
+            if global_choice == "Concluidos":
+                status_counts = status_counts[status_counts["Status"] == "Concluido"]
+            elif global_choice == "Faltando":
+                status_counts = status_counts[status_counts["Status"] == "Faltando"]
+            elif global_choice == "Unknow":
+                status_counts = status_counts[status_counts["Status"] == "Unknow"]
 
             # Aggregate counts after mapping
             status_counts = (
@@ -546,8 +617,9 @@ def page_integracao() -> None:
                 labels={"Type": "Status", "Count": "Quantidade", "Status": "Status"},
                 category_orders={"Type": integration_columns, "Status": ["Concluido", "Faltando"]},
                 color_discrete_map={
-                    "Concluido": "#1f77b4",  # Azul similar ao rollout
-                    "Faltando": "#ff7f0e",   # Laranja similar ao rollout
+                    "Concluido": "#1f77b4",  # Azul
+                    "Faltando": "#ff7f0e",   # Laranja
+                    "Unknow": "#6baed6",     # Light blue for Unknown/Unknow
                 }
             )
             # Let Plotly decide best text position (inside/outside) and give room at the top
@@ -557,7 +629,40 @@ def page_integracao() -> None:
 
         elif graph_option == "Sites por status (status atual)":
             # Count sites by computed status_atual (exclude None) and enforce order
-            sac = df["status_atual"].value_counts(dropna=True).rename_axis("Status").reset_index(name="Count")
+            sac_df = df.copy()
+            # If user selected specific phases in sel_status_atual, filter to those phases
+            sel_phases = st.session_state.get("f_status_atual", [])
+            if sel_phases:
+                # extract actual phase names
+                phases = [s.split(" - ", 1)[1] if " - " in s else s for s in sel_phases]
+                sac_df = sac_df[sac_df["status_atual"].isin(phases)]
+
+            # If global status radio asks for Concluidos/Faltando, map status_atual into those buckets
+            global_choice = st.session_state.get("f_status_choice", "Geral")
+            if global_choice in {"Concluidos", "Faltando"}:
+                # map the actual column values of the columns referenced by status_atual to Concluido/Faltando
+                def _map_status_atual_to_bucket(val):
+                    if pd.isna(val):
+                        return None
+                    # We don't have a direct status value here; instead we must look up the column named by val
+                    col = val
+                    if col in sac_df.columns:
+                        # pick the value in that column for each row
+                        return sac_df[col].apply(map_to_two_local)
+                    return None
+                # Create a simple bucket column by applying map_to_two_local to the column named in status_atual
+                # For rows where status_atual is a phase name, fetch the corresponding cell value
+                def _row_bucket(row):
+                    col = row.get("status_atual")
+                    if pd.isna(col):
+                        return None
+                    if col in sac_df.columns:
+                        return map_to_two_local(row[col])
+                    return None
+                sac_df["bucket"] = sac_df.apply(_row_bucket, axis=1)
+                sac = sac_df["bucket"].value_counts(dropna=True).rename_axis("Status").reset_index(name="Count")
+            else:
+                sac = sac_df["status_atual"].value_counts(dropna=True).rename_axis("Status").reset_index(name="Count")
             # Desired ordering: follow steps order, then Sem informação, then Concluído last
             desired_order = ["4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status", "Sem informação", "Concluído"]
             present = [s for s in desired_order if s in sac["Status"].values]
@@ -602,7 +707,13 @@ def page_integracao() -> None:
                     color="Status",
                 )
             else:
-                general_status_counts = df["General Status"].value_counts().rename_axis("Status").reset_index(name="Count")
+                # If user selected specific phases, filter to those rows first
+                sel_phases = st.session_state.get("f_status_atual", [])
+                gen_df = df
+                if sel_phases:
+                    phases = [s.split(" - ", 1)[1] if " - " in s else s for s in sel_phases]
+                    gen_df = gen_df[gen_df["status_atual"].isin(phases)]
+                general_status_counts = gen_df["General Status"].value_counts().rename_axis("Status").reset_index(name="Count")
 
                 fig = px.bar(
                     general_status_counts,
@@ -621,20 +732,122 @@ def page_integracao() -> None:
             fig.update_traces(textposition="outside")
             st.plotly_chart(fig, use_container_width=True)
 
+    # Build a table-copy that mirrors the filtering used by the selected graph
+    # so the tables shown below always correspond to the chart's filtered rows.
+    df_table = df.copy()
+
+    # Determine current graph and status choice
+    current_graph = st.session_state.get("f_graph_option", graph_option)
+    current_choice = st.session_state.get("f_status_choice", "Geral")
+    current_sel_status_atual = st.session_state.get("f_status_atual", [])
+
+    # Helper: integration columns used in the Integration chart
+    integration_columns = [
+        "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"
+    ]
+
+    # If the Integration chart is active, apply the same row-level filtering used to build the chart
+    if current_graph == "Integração Concluído x Faltando":
+        # If user filtered to specific phases, replicate the same column restriction
+        filtered_columns = integration_columns
+        if current_sel_status_atual:
+            cols = []
+            for sel in current_sel_status_atual:
+                if " - " in str(sel):
+                    col_name = str(sel).split(" - ", 1)[1]
+                else:
+                    col_name = sel
+                if col_name in integration_columns:
+                    cols.append(col_name)
+            if cols:
+                filtered_columns = cols
+            # Additionally, restrict rows to sites whose computed status_atual matches the selected phases
+            phases = [s.split(" - ", 1)[1] if " - " in s else s for s in current_sel_status_atual]
+            if phases:
+                df_table = df_table[df_table["status_atual"].isin(phases)]
+        # Apply global choice as a row filter so tables match the chart
+        if current_choice == "Concluidos":
+            mask_all = pd.Series(True, index=df_table.index)
+            for col in filtered_columns:
+                if col in df_table.columns:
+                    mapped = df_table[col].apply(map_to_two_local)
+                    col_mask = mapped == "Concluido"
+                    mask_all = mask_all & col_mask
+            df_table = df_table[mask_all]
+        elif current_choice == "Faltando":
+            mask_any = pd.Series(False, index=df_table.index)
+            for col in filtered_columns:
+                if col in df_table.columns:
+                    mapped = df_table[col].apply(map_to_two_local)
+                    col_mask = mapped == "Faltando"
+                    mask_any = mask_any | col_mask
+            df_table = df_table[mask_any]
+        elif current_choice == "Unknow":
+            # show rows where any of the relevant columns maps to Unknow
+            mask_any_unknown = pd.Series(False, index=df_table.index)
+            def _map_unknown_local(s):
+                if pd.isna(s):
+                    return "Unknow"
+                v = str(s).strip().lower()
+                if v in {"", "unknown", "nan", "none"}:
+                    return "Unknow"
+                # treat other non-recognized values as Unknow for the Integration summary
+                return "Unknow"
+            for col in filtered_columns:
+                if col in df_table.columns:
+                    col_mask = df_table[col].apply(_map_unknown_local) == "Unknow"
+                    mask_any_unknown = mask_any_unknown | col_mask
+            df_table = df_table[mask_any_unknown]
+
+    # If the Sites por status chart is active and the global choice maps to buckets,
+    # filter rows accordingly so the table mirrors the chart.
+    elif current_graph == "Sites por status (status atual)":
+        # If user selected specific phases, restrict rows to those phases (mirror chart)
+        if current_sel_status_atual:
+            phases = [s.split(" - ", 1)[1] if " - " in s else s for s in current_sel_status_atual]
+            df_table = df_table[df_table["status_atual"].isin(phases)]
+
+        if current_choice in {"Concluidos", "Faltando"}:
+            # create a bucket per-row similar to the chart logic
+            def _row_bucket_local(row):
+                col = row.get("status_atual")
+                if pd.isna(col):
+                    return None
+                if col in df_table.columns:
+                    return map_to_two_local(row[col])
+                return None
+
+            df_table = df_table.copy()
+            df_table["_bucket_for_table"] = df_table.apply(_row_bucket_local, axis=1)
+            df_table = df_table[df_table["_bucket_for_table"] == ("Concluido" if current_choice == "Concluidos" else "Faltando")]
+            df_table = df_table.drop(columns=["_bucket_for_table"], errors="ignore")
+
+    # For General Status chart, if the user requested 'Unknow', filter to unknown General Status rows
+    elif current_graph == "General Status":
+        # If user selected specific phases, restrict rows to those phases (mirror chart)
+        if current_sel_status_atual:
+            phases = [s.split(" - ", 1)[1] if " - " in s else s for s in current_sel_status_atual]
+            df_table = df_table[df_table["status_atual"].isin(phases)]
+
+        if current_choice == "Unknow" and "General Status" in df_table.columns:
+            mask = df_table["General Status"].astype(str).str.strip().str.lower().isin(["", "nan", "unknown"]) 
+            df_table = df_table[mask]
+
     # Tabela de resumo: selecionar apenas colunas existentes (pertence à seção 'Status de Integração')
     if st.session_state.get("int_show_status", True):
         desired_columns = [
-            "Site Name", "General Status", "4G Status", "2G Status",
-            "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"
+            "Site Name", "Region", "General Status", "4G Status", "2G Status",
+            "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Date", "OT Status", "ARQ Number"
         ]
         # Ensure status_atual is positioned immediately to the right of General Status
-        existing_cols = [c for c in desired_columns if c in df.columns]
+        # derive columns from df_table so the table mirrors the chart filters
+        existing_cols = [c for c in desired_columns if c in df_table.columns]
         cols = []
         for c in existing_cols:
             cols.append(c)
             if c == "General Status":
                 # insert status_atual right after General Status (if it exists)
-                if "status_atual" in df.columns:
+                if "status_atual" in df_table.columns:
                     cols.append("status_atual")
 
         # Append Region and ARQ Number as the last columns if present
@@ -642,7 +855,7 @@ def page_integracao() -> None:
             if endc in df.columns and endc not in cols:
                 cols.append(endc)
 
-        status_summary = df[cols]
+    status_summary = df_table[cols]
 
     # ---- Converter status para a PRIMEIRA tabela (apenas) para Concluido / Faltando ----
     # Esta lógica pertence exclusivamente à seção 'Status de Integração' e
@@ -712,8 +925,8 @@ def page_integracao() -> None:
         )
         with st.expander("Tabela Consolidada", expanded=False):
             # aplicar largura do Comment e coloração nas colunas de status existentes
-            fiel_status_cols = [c for c in ["General Status", "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"] if c in df.columns]
-            base_style = df.style.set_properties(subset=["Comment"] if "Comment" in df.columns else [], **{"width": "300px"})
+            fiel_status_cols = [c for c in ["General Status", "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 2G", "OT 4G", "OT Status"] if c in df_table.columns]
+            base_style = df_table.style.set_properties(subset=["Comment"] if "Comment" in df_table.columns else [], **{"width": "300px"})
             if fiel_status_cols:
                 base_style = base_style.applymap(style_faithful, subset=fiel_status_cols)
             st.dataframe(base_style, use_container_width=True)

@@ -1,6 +1,7 @@
 """ETL para análise de integração."""
 
 import pandas as pd
+import warnings
 
 def process_integration_data(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -12,30 +13,57 @@ def process_integration_data(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: DataFrame processado com todas as colunas relevantes.
     """
-    # Garantir que as colunas necessárias existam
-    required_columns = [
-        "Site Name", "General Status", "Comment", "4G Status", "2G Status",
-        "Alarm test", "Calling test", "IR", "SSV", "ARQ Number", "OT 4G", "OT 2G", "OT Status", "Pre-comissioned",
-        "Region", "Related BSC", "BSC ID", "BSC SCTP", "MEIO TX", "MEID", "2G BTS ID", "LTE eNodeB ID",
-        "OAM IP", "OAM IP netmask", "OAM Gateway", "VLAN", "GSM IP", "GSM IP netmask", "GSM IP Gateway",
-        "LTE IP", "LTE IP netmask", "LTE IP Gateway"
+    # Definir todas as colunas exatas conforme fornecidas pelo usuário
+    expected_columns = [
+        "Site Name", "Region", "General Status", "Comment", "4G Status", "2G Status",
+        "Alarm test", "Calling test", "IR", "SSV", "ARQ Number", "IW Novo", "IW Reuso",
+        "OT 2G", "OT 4G", "OT Date", "OT Status", "Pre-comissioned", "Related BSC",
+        "BSC ID", "BSC SCTP", "MEIO TX", "MEID", "2G BTS ID", "LTE eNodeB ID",
+        "OAM IP", "OAM IP netmask", "OAM Gateway", "VLAN", "GSM IP", "GSM IP netmask",
+        "GSM IP Gateway", "LTE IP", "LTE IP netmask", "LTE IP Gateway"
     ]
-    missing_columns = [col for col in required_columns if col not in df.columns]
+    
+    # Limpar nomes das colunas (remover espaços extras, normalizar)
+    df.columns = df.columns.str.strip()
+    
+    # Verificar quais colunas estão presentes e quais estão faltando
+    present_columns = [col for col in expected_columns if col in df.columns]
+    missing_columns = [col for col in expected_columns if col not in df.columns]
+    
     if missing_columns:
-        raise ValueError(f"Colunas obrigatórias ausentes: {', '.join(missing_columns)}")
-
-    # Filtrar colunas relevantes
-    df = df[required_columns]
-
-    # Nota: não forçar conversão de Integration date/MOS aqui — a página lida com campos opcionais
-
-    # Adicionar colunas calculadas, se necessário
-    status_columns = ["4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "OT 4G", "OT 2G", "OT Status"]
-    for c in status_columns:
-        if c in df.columns:
-            df[c] = df[c].fillna("Unknown")
-
-    return df
+        warnings.warn(f"Colunas ausentes na planilha: {', '.join(missing_columns)}. Continuando sem elas.")
+    
+    # Usar apenas as colunas que existem
+    df_filtered = df[present_columns].copy()
+    
+    # Adicionar colunas ausentes como NaN para manter a estrutura esperada
+    for col in missing_columns:
+        df_filtered[col] = pd.NA
+    
+    # Reordenar para manter a ordem esperada
+    df_filtered = df_filtered.reindex(columns=expected_columns)
+    
+    # Normalizar valores nas colunas de status (trim whitespace, padronizar valores)
+    status_columns = ["4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", 
+                     "OT 2G", "OT 4G", "OT Status", "General Status"]
+    
+    for col in status_columns:
+        if col in df_filtered.columns:
+            # Converter para string, trim, e padronizar alguns valores
+            df_filtered[col] = df_filtered[col].astype(str).str.strip()
+            # Substituir valores vazios/nan por "Unknown"
+            df_filtered[col] = df_filtered[col].replace(['nan', 'NaN', '', ' ', 'None'], 'Unknown')
+            # Padronizar alguns valores comuns
+            df_filtered[col] = df_filtered[col].str.replace('Finished', 'Finished', case=False)
+            df_filtered[col] = df_filtered[col].str.replace('Pending', 'Pending', case=False)
+            df_filtered[col] = df_filtered[col].str.replace('Unknown', 'Unknown', case=False)
+    
+    # Garantir que Site Name não tenha valores vazios
+    if "Site Name" in df_filtered.columns:
+        df_filtered = df_filtered[df_filtered["Site Name"].notna()]
+        df_filtered = df_filtered[df_filtered["Site Name"].astype(str).str.strip() != ""]
+    
+    return df_filtered
 
 def summarize_status(df: pd.DataFrame) -> pd.DataFrame:
     """
