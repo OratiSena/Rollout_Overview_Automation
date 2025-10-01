@@ -109,11 +109,11 @@ def get_explicit_phase_map(df_raw: pd.DataFrame) -> list[tuple[str,str,int]]:
 
     Order:
       1.1 PPO-AC, 1.2 IPO-AC, 1.3 SV-AC, 1.4 IPP-AC, 1.5 APP-AC,
-      2.3 RFP-AC,
+      2.1 PHLS-AC, 2.2 IHLS-AC, 2.3 RFP-AC, 2.4 Issue Infra PO-AC,
       3.1 RFI-AC, 4.1 TXA-AC,
       5.1 MRQ-AC, 5.2 RDO-AC, 5.3 RPI-AC, 5.4 WHP-AC, 5.5 API-AC, 5.6 INV-AC, 5.7 DEL-AC, 5.8 POD-AC,
       6.1 I&C-AC, 6.2 INT-AC,
-      7.1 IDP-AC, 7.2 ARQ-AC, 7.3 PAC-AC, 7.4 FAC-AC
+      7.1 IDP-AC, 7.1.1 IAD-AC, 7.2 ARQ-AC, 7.2.1 OT-AC, 7.3 PAC-AC, 7.4 FAC-AC
     """
     desired = [
     # 1.x
@@ -123,8 +123,11 @@ def get_explicit_phase_map(df_raw: pd.DataFrame) -> list[tuple[str,str,int]]:
     ("1.4- Issue Project",       "IPP",  ["IPP-AC"]),
     ("1.5- Approve Project",     "APP",  ["APP-AC"]),
 
-    # 2.x
+    # 2.x - Adding previously ignored statuses
+    ("2.1- HLS Pre-PO",          "PHLS", ["PHLS-AC", "HLS PRE-PO-AC", "HLS PREPO-AC"]),
+    ("2.2- Issue HLS PO",        "IHLS", ["IHLS-AC", "HLS PO-AC", "HLSPO-AC"]),
     ("2.3- Infra Pre-PO",        "PINF", ["PINF-AC"]),
+    ("2.4- Issue Infra PO",      "IINF", ["IINF-AC", "INFRA PO-AC", "INFRAPO-AC"]),
 
     # 3.x, 4.x ...
     ("3.1- Ready for Install",   "RFI",  ["RFI-AC"]),
@@ -144,9 +147,11 @@ def get_explicit_phase_map(df_raw: pd.DataFrame) -> list[tuple[str,str,int]]:
     ("6.1- Install",             "INST", ["I&C-AC", "INC-AC", "INS-AC"]),
     ("6.2- Integrate",           "INT",  ["INT-AC"]),
 
-    # 7.x
+    # 7.x - Adding previously ignored statuses and changing ARQ/OT structure
     ("7.1- Issue Final Project", "PDI",  ["IDP-AC"]),
-    ("7.2- Raise Acceptance",    "OT",   ["ARQ-AC", "OT-AC"]),
+    ("7.1.1- Issue Accept Docs", "IAD",  ["IAD-AC", "ISSUE ACCEPT DOCS-AC"]),
+    ("7.2- Raise Acceptance",    "ARQ",  ["ARQ-AC"]),  # Changed from OT to ARQ
+    ("7.2.1- Open Traffic",      "OT",   ["OT-AC"]),   # Added: Open Traffic as separate status
     ("7.3- Provisional Accept",  "PAC",  ["PAC-AC"]),
     ("7.4- Final Accept",        "FAC",  ["FAC-AC"]),
     ]
