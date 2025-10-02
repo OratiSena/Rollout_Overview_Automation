@@ -1186,7 +1186,21 @@ def page_rollout():
         def _add_q_term():
             val = st.session_state.get("q_search_new", "").strip()
             if val:
+                # split on explicit separators first (semicolon, comma, newlines)
                 parts = [p.strip() for p in val.replace(";", "\n").replace(",", "\n").splitlines() if p.strip()]
+                # If user pasted a single chunk with many space-separated tokens
+                # (common when copying site codes), attempt to split on whitespace
+                # but only when it looks like a list of codes (heuristic).
+                if len(parts) == 1 and " " in parts[0]:
+                    try:
+                        ws_parts = [p.strip() for p in parts[0].split() if p.strip()]
+                        import re
+                        if ws_parts and len(ws_parts) > 1 and all(re.match(r'^[A-Za-z0-9\-_/]+$', t) for t in ws_parts):
+                            parts = ws_parts
+                    except Exception:
+                        # fallback: keep original single part
+                        pass
+
                 cur = list(st.session_state.get("q_terms", []))
                 for p in parts:
                     if not any(p.lower() == c.lower() for c in cur):
