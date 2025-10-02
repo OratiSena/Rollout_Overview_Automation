@@ -158,7 +158,18 @@ def get_explicit_phase_map(df_raw: pd.DataFrame) -> list[tuple[str,str,int]]:
 
 
     header = pd.Series(df_raw.iloc[6]).astype(str).str.strip()
-    name_to_idx = {str(v).strip().upper(): i for i, v in enumerate(header)}
+    # Preserve the FIRST occurrence of each header token. In some sheets the
+    # same label (e.g. "INT-AC", "TXA-AC") may appear more than once. The
+    # previous dict comprehension kept the last occurrence which caused the
+    # mapper to point to the wrong column and drop some sites from counts.
+    name_to_idx: dict[str, int] = {}
+    for i, v in enumerate(header):
+        key = str(v).strip().upper()
+        if not key:
+            # skip empty header cells
+            continue
+        if key not in name_to_idx:
+            name_to_idx[key] = i
 
     out: list[tuple[str,str,int]] = []
     for full, short, keys in desired:
