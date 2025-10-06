@@ -3,6 +3,10 @@ from datetime import datetime, timedelta
 
 # ============== Limpeza ==============
 def clean_rollout_dataframe(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    # Valida se o DataFrame tem linhas suficientes
+    if len(df_raw) < 7:
+        raise ValueError(f"DataFrame deve ter pelo menos 7 linhas para processar o header. Encontradas apenas {len(df_raw)} linhas.")
+    
     header_rows = 7
     df_header = df_raw.iloc[:header_rows, :]
     df_data = df_raw.iloc[header_rows:, :].copy()
@@ -115,6 +119,10 @@ def get_explicit_phase_map(df_raw: pd.DataFrame) -> list[tuple[str,str,int]]:
       6.1 I&C-AC, 6.2 INT-AC,
       7.1 IDP-AC, 7.1.1 IAD-AC, 7.2 ARQ-AC, 7.2.1 OT-AC, 7.3 PAC-AC, 7.4 FAC-AC
     """
+    # Valida se o DataFrame tem linhas suficientes
+    if len(df_raw) < 7:
+        return []  # retorna lista vazia se não tiver linhas suficientes
+    
     desired = [
     # 1.x
     ("1.1- PWS Pre-PO",          "PPO",  ["PPO-AC", "PPWS-AC", "PWS PRE-PO-AC", "PWS PREPO-AC", "PWS PRE PO-AC"]),

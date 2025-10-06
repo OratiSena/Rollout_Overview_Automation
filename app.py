@@ -409,12 +409,79 @@ def read_excel_no_header(path: Path) -> pd.DataFrame:
     # header=None preserva as 7 linhas do topo (KPIs na linha 6)
     ext = path.suffix.lower()
     engine = None
+    
     if ext == ".xlsb":
-        engine = "pyxlsb"
+        # Para .xlsb, primeiro tenta encontrar a sheet com dados
+        try:
+            xl_file = pd.ExcelFile(path, engine="pyxlsb")
+            sheets = xl_file.sheet_names
+            
+            # Procura por sheets com nomes conhecidos que contêm dados
+            target_sheets = ["Rollout", "Rollout$_FilterDatabase", "Sheet1", "Planilha1"]
+            sheet_to_read = None
+            
+            # Primeiro tenta sheets com nomes específicos
+            for target in target_sheets:
+                if target in sheets:
+                    sheet_to_read = target
+                    break
+            
+            # Se não encontrou, testa cada sheet para ver qual tem dados
+            if sheet_to_read is None:
+                for sheet in sheets:
+                    try:
+                        test_df = pd.read_excel(path, sheet_name=sheet, header=None, engine="pyxlsb", nrows=1)
+                        if len(test_df) > 0 and len(test_df.columns) > 10:  # Sheet com dados substanciais
+                            sheet_to_read = sheet
+                            break
+                    except Exception:
+                        continue
+            
+            # Lê a sheet escolhida
+            if sheet_to_read:
+                df = pd.read_excel(path, sheet_name=sheet_to_read, header=None, engine="pyxlsb")
+                if len(df) > 0:
+                    return df
+                else:
+                    raise Exception(f"Sheet '{sheet_to_read}' está vazia")
+            else:
+                raise Exception(f"Nenhuma sheet com dados encontrada. Sheets disponíveis: {sheets}")
+                
+        except Exception as e:
+            st.warning(f"Erro específico com .xlsb: {e}")
+            # Fallback: tenta métodos antigos
+            try:
+                df = pd.read_excel(path, sheet_name=0, header=None, engine="pyxlsb")
+                if len(df) > 0:
+                    return df
+            except Exception:
+                pass
+            
+            try:
+                df = pd.read_excel(path, sheet_name=0, header=None, engine="openpyxl")
+                if len(df) > 0:
+                    return df
+            except Exception:
+                pass
+                
+            raise Exception("Não foi possível ler o arquivo .xlsb com nenhum método disponível")
+    
     elif ext in {".xlsx", ".xlsm", ".xltx", ".xltm"}:
         engine = "openpyxl"
     elif ext == ".xls":
         engine = "xlrd"
+    elif ext == ".csv":
+        # Para CSV, lê direto sem engine
+        try:
+            return pd.read_csv(path, header=None, encoding='utf-8')
+        except UnicodeDecodeError:
+            # Tenta com encoding latin-1 se utf-8 falhar
+            try:
+                return pd.read_csv(path, header=None, encoding='latin-1')
+            except Exception as e:
+                st.error(f"Erro ao ler CSV {path.name}: {e}")
+                raise
+    
     try:
         return pd.read_excel(path, sheet_name=0, header=None, engine=engine)
     except Exception as e:
@@ -449,7 +516,7 @@ def _save_meta(saved_path: Path, original_name: str):
 
 def _cleanup_saved_excels():
     try:
-        patterns = ("*.xlsb", "*.xlsx", "*.xlsm", "*.xls")
+        patterns = ("*.xlsb", "*.xlsx", "*.xlsm", "*.xls", "*.csv")
         for pat in patterns:
             for p in DATA_DIR.glob(pat):
                 try:
@@ -996,17 +1063,17 @@ def page_rollout():
         st.session_state["sel_phase_full"] = "Todas"
         st.session_state["__do_reset__"] = False
     st.title("Rollout Claro RAN - Overview")
-    st.caption("Suba o Excel (.xlsb, .xlsx) e acompanhe KPIs e detalhamento por status.")
+    st.caption("Suba o Excel (.xlsb, .xlsx) ou CSV e acompanhe KPIs e detalhamento por status.")
 
     # ========== 1) Upload + Carregar ==========
     uploaded = st.file_uploader(
-        "Upload do arquivo Excel (.xlsb, .xlsx)",
-        type=["xlsb", "xlsx", "xlsm"],
+        "Upload do arquivo Excel (.xlsb, .xlsx) ou CSV",
+        type=["xlsb", "xlsx", "xlsm", "csv"],
         accept_multiple_files=False,
     )
     if uploaded is not None:
         ext = (Path(uploaded.name).suffix or "").lower()
-        if ext not in {".xlsb", ".xlsx", ".xlsm"}:
+        if ext not in {".xlsb", ".xlsx", ".xlsm", ".csv"}:
             st.error(f"Extensao nao suportada: {ext}")
         else:
             safe_name = Path(uploaded.name).name
@@ -1061,24 +1128,33 @@ def page_rollout():
             target_path = SAVED_FILE
         else:
             cands = []
-            for pat in ("*.xlsb", "*.xlsx", "*.xlsm"):
+            for pat in ("*.xlsb", "*.xlsx", "*.xlsm", "*.csv"):
                 cands.extend(DATA_DIR.glob(pat))
             if cands:
                 target_path = sorted(cands, key=lambda p: p.stat().st_mtime)[-1]
         if not target_path:
             st.error("Nenhum arquivo salvo. Faca o upload primeiro.")
             st.stop()
-        with st.spinner("Lendo e tratando..."):
-            df_raw = read_excel_no_header(target_path)
-            df_clean, df_header = clean_rollout_dataframe(df_raw)
-        st.session_state.rollout_df_raw = df_raw
-        st.session_state.rollout_df_clean = df_clean
-        st.session_state.rollout_df_header = df_header
         try:
-            st.session_state.rollout_file_path = str(target_path)
-        except Exception:
-            pass
-        st.success("Planilha carregada!")
+            with st.spinner("Lendo e tratando..."):
+                df_raw = read_excel_no_header(target_path)
+                df_clean, df_header = clean_rollout_dataframe(df_raw)
+            st.session_state.rollout_df_raw = df_raw
+            st.session_state.rollout_df_clean = df_clean
+            st.session_state.rollout_df_header = df_header
+            try:
+                st.session_state.rollout_file_path = str(target_path)
+            except Exception:
+                pass
+            st.success("Planilha carregada!")
+        except ValueError as e:
+            st.error(f"Erro na estrutura do arquivo: {str(e)}")
+            st.info("Verifique se o arquivo tem o formato correto do Excel de Rollout (com pelo menos 7 linhas de cabeçalho).")
+            st.stop()
+        except Exception as e:
+            st.error(f"Erro ao carregar planilha: {str(e)}")
+            st.info("Verifique se o arquivo está no formato correto (.xlsb, .xlsx) e não está corrompido.")
+            st.stop()
 
     if "rollout_df_raw" not in st.session_state:
         st.info("Carregue a planilha para continuar.")
