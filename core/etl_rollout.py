@@ -13,15 +13,21 @@ def clean_rollout_dataframe(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.Data
 
     new_header = df_raw.iloc[6].tolist()              # linha 7 do Excel (index 6)
     df_data.columns = new_header
-    df_data = df_data.loc[:, ~df_data.columns.isna()] # remove colunas sem header
+    df_data = df_data.loc[:, ~df_data.columns.isna()] # removes columns without header
     df_data = df_data.dropna(how="all").reset_index(drop=True)
 
     rename_map = {
         "Host Name": "host_name",
-        "Site Name": "SITE",
+        "Site": "SITE",  # Atualizado para refletir o novo nome da coluna
         "State": "state",
         "Current Status": "current_status",
     }
+
+    # Verifica se todas as colunas necessárias estão presentes
+    missing_columns = [col for col in rename_map if col not in df_data.columns]
+    if missing_columns:
+        raise ValueError(f"As seguintes colunas estão ausentes no arquivo: {', '.join(missing_columns)}")
+
     df_data = df_data.rename(columns=rename_map)
     return df_data, df_header
 
