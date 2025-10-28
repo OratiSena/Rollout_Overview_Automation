@@ -312,8 +312,8 @@ def page_integracao() -> None:
             r1c1, r1c2, r1c3, r1c4 = st.columns([2,3,2,2])
             with r1c1:
                 # Do not expose 'Unknown' option here; Unknown is handled via the Status radio
-                # Novos valores: Instalation, Integration, Under Approval (mantém On going por compatibilidade)
-                gen_opts = ["Finished", "Instalation", "Integration", "Under Approval", "On going"]
+                # Removido 'On going' (não existe mais)
+                gen_opts = ["Finished", "Instalation", "Integration", "Under Approval"]
                 sel_general = st.multiselect("General Status:", options=gen_opts, default=[], help="Filtra por General Status", key="f_gen_status")
             with r1c2:
                 txt_search = st.text_input("Pesquisar (Site, status, Region, Comment, ARQ):", key="f_txt_search")
@@ -709,10 +709,11 @@ def page_integracao() -> None:
                 st.plotly_chart(fig2, use_container_width=True)
 
         elif graph_option == "General Status":
-            # Gráfico de General Status
-            # If the Status radio is set to 'Unknow', show only the Unknown bar and a different title
+            # Gráfico de General Status com apenas as opções solicitadas
+            allowed = ["Finished", "Integration", "Instalation", "Under Approval"]
+
+            # Se o Status global for 'Unknow', mostrar apenas Unknown
             if st.session_state.get("f_status_choice", "Geral") == "Unknow":
-                # Count unknown/not-filled rows
                 if "General Status" in df.columns:
                     mask = df["General Status"].astype(str).str.strip().str.lower().isin(["", "nan", "unknown"])
                     unknown_count = int(mask.sum())
@@ -730,13 +731,35 @@ def page_integracao() -> None:
                     color="Status",
                 )
             else:
-                # If user selected specific phases, filter to those rows first
+                # Opcionalmente filtrar pelas fases selecionadas (status_atual)
                 sel_phases = st.session_state.get("f_status_atual", [])
                 gen_df = df
                 if sel_phases:
                     phases = [s.split(" - ", 1)[1] if " - " in s else s for s in sel_phases]
                     gen_df = gen_df[gen_df["status_atual"].isin(phases)]
-                general_status_counts = gen_df["General Status"].value_counts().rename_axis("Status").reset_index(name="Count")
+
+                # Normalizar valores de General Status para as 4 opções
+                def _canon(v):
+                    if pd.isna(v):
+                        return None
+                    s = str(v).strip().lower()
+                    if s == "finished":
+                        return "Finished"
+                    if s in {"instalation", "installation"}:
+                        return "Instalation"
+                    if s == "integration":
+                        return "Integration"
+                    if s in {"under approval", "underapproval"}:
+                        return "Under Approval"
+                    return None
+
+                series = gen_df.get("General Status")
+                if series is None:
+                    general_status_counts = pd.DataFrame({"Status": allowed, "Count": [0, 0, 0, 0]})
+                else:
+                    mapped = series.map(_canon)
+                    counts = mapped.value_counts().reindex(allowed, fill_value=0)
+                    general_status_counts = counts.rename_axis("Status").reset_index(name="Count")
 
                 fig = px.bar(
                     general_status_counts,
@@ -746,12 +769,12 @@ def page_integracao() -> None:
                     title=f"Resumo do General Status | {in_integration_count:,} sites em Integração",
                     labels={"Status": "Status", "Count": "Quantidade"},
                     color="Status",
+                    category_orders={"Status": allowed},
                     color_discrete_map={
-                        "Finished": "#28a745",      # Verde vibrante
-                        "Instalation": "#ff7f0e",    # Laranja
-                        "Integration": "#17a2b8",    # Ciano
-                        "Under Approval": "#ffc107",  # Amarelo
-                        "On going": "#007bff",       # Azul
+                        "Finished": "#28a745",     # verde
+                        "Integration": "#ff7f0e",  # laranja
+                        "Instalation": "#dc3545",  # vermelho
+                        "Under Approval": "#007bff" # azul
                     }
                 )
             fig.update_traces(textposition="outside")
@@ -917,8 +940,19 @@ def page_integracao() -> None:
                 return "color: #ff7f0e; font-weight: 600"
             return ""
 
+        # Estilização adicional: General Status (Integration/Instalation/Under Approval) em laranja
+        def style_general_orange(val):
+            if pd.isna(val):
+                return ""
+            v = str(val).strip().lower()
+            if v in {"integration", "instalation", "installation", "under approval", "underapproval"}:
+                return "color: #ff7f0e; font-weight: 600"
+            return ""
+
         if not summary_for_display.empty:
             styled_summary = summary_for_display.style.applymap(style_two, subset=status_cols)
+            if "General Status" in summary_for_display.columns:
+                styled_summary = styled_summary.applymap(style_general_orange, subset=["General Status"])
             st.dataframe(styled_summary, use_container_width=True)
         else:
             st.write("Nenhum registro para exibir na tabela de resumo.")
@@ -926,14 +960,26 @@ def page_integracao() -> None:
     # ---- Tabela Consolidada: manter valores originais (fiel), mas aplicar cores por valor ----
     if st.session_state.get("int_show_consolidada", True):
         # Cores por valor usadas na planilha (aproximação):
+        # Base style strings
+        _style_finished = "background-color: #d4edda; color: #155724"   # greenish
+        _style_pending  = "background-color: #fff3cd; color: #856404"   # orange/yellow
+        _style_blue     = "background-color: #cfe2ff; color: #084298"   # blue-ish
+        _style_lightblu = "background-color: #d1ecf1; color: #0c5460"   # light-blue
+
         faithful_colors = {
-            "finished": "background-color: #d4edda; color: #155724",  # greenish
-            "pending": "background-color: #fff3cd; color: #856404",   # orange/yellow
+            "finished": _style_finished,
+            "pending": _style_pending,
             "kpi rejected": "background-color: #f8d7da; color: #721c24",  # red-ish
-            "waiting approval": "background-color: #cfe2ff; color: #084298",  # blue-ish
-            "upload to iw": "background-color: #d1ecf1; color: #0c5460",  # light-blue
-            "on going": "background-color: #cfe2ff; color: #084298",  # blue-ish (On going)
-            "ongoing": "background-color: #cfe2ff; color: #084298"  # variant
+            "waiting approval": _style_blue,
+            "upload to iw": _style_lightblu,
+            "on going": _style_blue,   # legacy
+            "ongoing": _style_blue,
+            # General Status values mapped to same color as 'Pending'
+            "integration": _style_pending,
+            "instalation": _style_pending,
+            "installation": _style_pending,
+            "under approval": _style_pending,
+            "underapproval": _style_pending,
         }
 
         def style_faithful(val):
