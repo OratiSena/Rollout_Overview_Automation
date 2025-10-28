@@ -312,7 +312,8 @@ def page_integracao() -> None:
             r1c1, r1c2, r1c3, r1c4 = st.columns([2,3,2,2])
             with r1c1:
                 # Do not expose 'Unknown' option here; Unknown is handled via the Status radio
-                gen_opts = ["Finished", "On going"]
+                # Novos valores: Instalation, Integration, Under Approval (mantém On going por compatibilidade)
+                gen_opts = ["Finished", "Instalation", "Integration", "Under Approval", "On going"]
                 sel_general = st.multiselect("General Status:", options=gen_opts, default=[], help="Filtra por General Status", key="f_gen_status")
             with r1c2:
                 txt_search = st.text_input("Pesquisar (Site, status, Region, Comment, ARQ):", key="f_txt_search")
@@ -322,6 +323,10 @@ def page_integracao() -> None:
             with r1c4:
                 arq_opts = sorted(df["ARQ Number"].dropna().unique().tolist()) if "ARQ Number" in df.columns else []
                 sel_arq = st.multiselect("ARQ Number:", options=arq_opts, default=[], key="f_arq")
+
+            # Nova linha: filtro de Owner
+            owner_opts = sorted(df["Owner"].dropna().astype(str).str.strip().unique().tolist()) if "Owner" in df.columns else []
+            sel_owner = st.multiselect("Owner:", options=owner_opts, default=[], key="f_owner")
 
             # Third area: (status radio moved above)
             if status_columns:
@@ -367,7 +372,13 @@ def page_integracao() -> None:
             s = str(v).strip()
             if s.lower() == "finished":
                 return "Finished"
-            if s.lower() in {"on going", "ongoing"}:
+            if s.lower() in {"instalation", "installation"}:
+                return "Instalation"
+            if s.lower() == "integration":
+                return "Integration"
+            if s.lower() in {"under approval", "underapproval"}:
+                return "Under Approval"
+            if s.lower() in {"on going", "ongoing"}:  # compatibilidade
                 return "On going"
             return "Unknown"
         df_filtered = df_filtered[df_filtered["General Status"].apply(general_match).isin(sel_general)]
@@ -375,6 +386,14 @@ def page_integracao() -> None:
     # ARQ
     if sel_arq:
         df_filtered = df_filtered[df_filtered["ARQ Number"].isin(sel_arq)]
+
+    # Owner
+    try:
+        sel_owner
+    except NameError:
+        sel_owner = []
+    if sel_owner and "Owner" in df_filtered.columns:
+        df_filtered = df_filtered[df_filtered["Owner"].astype(str).str.strip().isin(sel_owner)]
 
     # Status map filters (Concluido/Faltando) for each status column
     def map_to_two_local(s):
@@ -391,14 +410,16 @@ def page_integracao() -> None:
     status_choice = st.session_state.get("f_status_choice", "Geral")
     
     if status_choice == "Geral":
-        # Geral: show only rows that are in integration (General Status = "Finished" or "On going")
+        # Geral: considerar Finished + (Instalation/Integration/Under Approval)
         if "General Status" in df_filtered.columns:
-            mask = df_filtered["General Status"].astype(str).str.strip().str.lower().isin(['finished', 'on going', 'ongoing'])
+            valid = {"finished", "instalation", "installation", "integration", "under approval", "underapproval", "on going", "ongoing"}
+            mask = df_filtered["General Status"].astype(str).str.strip().str.lower().isin(valid)
             df_filtered = df_filtered[mask]
     elif status_choice == "Unknow":
         # Unknow: rows not in integration (General Status empty or Unknown)
         if "General Status" in df_filtered.columns:
-            mask = ~df_filtered["General Status"].astype(str).str.strip().str.lower().isin(['finished', 'on going', 'ongoing'])
+            known = {"finished", "instalation", "installation", "integration", "under approval", "underapproval", "on going", "ongoing"}
+            mask = ~df_filtered["General Status"].astype(str).str.strip().str.lower().isin(known)
             df_filtered = df_filtered[mask]
     # For Concluidos and Faltando, we'll apply the filter AFTER the column selection
 
@@ -415,7 +436,9 @@ def page_integracao() -> None:
     status_choice = st.session_state.get("f_status_choice", "Geral")
     if status_choice in {"Concluidos", "Faltando"} and "General Status" in df.columns:
         before_all = len(df)
-        in_integration_mask = df["General Status"].astype(str).str.strip().str.lower().isin(["finished", "on going", "ongoing"])
+        in_integration_mask = df["General Status"].astype(str).str.strip().str.lower().isin([
+            "finished", "instalation", "installation", "integration", "under approval", "underapproval", "on going", "ongoing"
+        ])
         df = df[in_integration_mask]
         after_all = len(df)
         # debug output removed
@@ -724,9 +747,11 @@ def page_integracao() -> None:
                     labels={"Status": "Status", "Count": "Quantidade"},
                     color="Status",
                     color_discrete_map={
-                        "Finished": "#28a745",  # Verde vibrante
-                        "On going": "#007bff",  # Azul vibrante
-                        "Waiting": "#ffc107"  # Amarelo vibrante
+                        "Finished": "#28a745",      # Verde vibrante
+                        "Instalation": "#ff7f0e",    # Laranja
+                        "Integration": "#17a2b8",    # Ciano
+                        "Under Approval": "#ffc107",  # Amarelo
+                        "On going": "#007bff",       # Azul
                     }
                 )
             fig.update_traces(textposition="outside")
