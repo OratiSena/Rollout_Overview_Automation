@@ -15,7 +15,7 @@ def process_integration_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     # Definir todas as colunas exatas conforme fornecidas pelo usuário
     expected_columns = [
-        "Site Name", "Region", "General Status", "Comment", "4G Status", "2G Status",
+        "Site Name", "Region", "General Status", "Owner", "Comment", "4G Status", "2G Status",
         "Alarm test", "Calling test", "IR", "SSV", "ARQ Number", "IW Novo", "IW Reuso",
         "OT 2G", "OT 4G", "OT Date", "OT Status", "Pre-comissioned", "Related BSC",
         "BSC ID", "BSC SCTP", "MEIO TX", "MEID", "2G BTS ID", "LTE eNodeB ID",

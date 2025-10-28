@@ -252,7 +252,7 @@ def page_integracao() -> None:
             mos_start = mos_end = None
 
             # Preparar valores e colunas utilizáveis (após os controles do topo)
-            search_columns = [c for c in ["Site Name", "Region", "General Status", "Comment", "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "ARQ Number", "OT Status", "OT 2G", "OT 4G", "OT Date"] if c in df.columns]
+            search_columns = [c for c in ["Site Name", "Region", "General Status", "Owner", "Comment", "4G Status", "2G Status", "Alarm test", "Calling test", "IR", "SSV", "ARQ Number", "OT Status", "OT 2G", "OT 4G", "OT Date"] if c in df.columns]
             # New filter: Selecionar por status_atual (computed)
             # We compute the available options from the raw dataframe (before applying other filters)
             # and display them in a fixed order with numeric prefixes.
@@ -940,11 +940,15 @@ def page_integracao() -> None:
                 return "color: #ff7f0e; font-weight: 600"
             return ""
 
-        # Estilização adicional: General Status (Integration/Instalation/Under Approval) em laranja
-        def style_general_orange(val):
+        # Estilização adicional: General Status
+        # - Finished: azul
+        # - Integration/Instalation/Under Approval: laranja
+        def style_general_color(val):
             if pd.isna(val):
                 return ""
             v = str(val).strip().lower()
+            if v == "finished":
+                return "color: #1f77b4; font-weight: 600"
             if v in {"integration", "instalation", "installation", "under approval", "underapproval"}:
                 return "color: #ff7f0e; font-weight: 600"
             return ""
@@ -952,7 +956,7 @@ def page_integracao() -> None:
         if not summary_for_display.empty:
             styled_summary = summary_for_display.style.applymap(style_two, subset=status_cols)
             if "General Status" in summary_for_display.columns:
-                styled_summary = styled_summary.applymap(style_general_orange, subset=["General Status"])
+                styled_summary = styled_summary.applymap(style_general_color, subset=["General Status"])
             st.dataframe(styled_summary, use_container_width=True)
         else:
             st.write("Nenhum registro para exibir na tabela de resumo.")
